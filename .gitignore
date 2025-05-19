@@ -1,24 +1,82 @@
-# build output
+# .gitignore
+# Build output
 dist/
-# generated types
-.astro/
 
-# dependencies
+# Astro build cache and output
+.astro/
+.output/
+
+# Dependencies
 node_modules/
 
-# logs
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-
-# environment variables
+# Environment variables
 .env
+.env.*local
+.env.development
 .env.production
+.dev.vars
 
 # macOS-specific files
 .DS_Store
 
-# jetbrains setting folder
+# Cloudflare
+.mf/ # Miniflare directory for local development state
+.wrangler/
+.cloudflare/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Editor directories and files
 .idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Drizzle Studio
+drizzle.config.ts.snap
+
+# Authentication state
+playwright/.auth/
+
+# Temporary files
+.tmp/
+tmp/
+
+# Generated files
+# D1 local development
+.d1/
+# Vercel (if used, good to keep)
+.vercel
+# Turborepo cache (if used)
+.turbo
+
+# Mojo files
+*.mojo
+*.🔥
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints
+
+# Other
+*.log
+*.db
+*.sqlite
+*.sqlite3

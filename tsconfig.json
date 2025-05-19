@@ -1,5 +1,50 @@
+// tsconfig.json
 {
   "extends": "astro/tsconfigs/strict",
-  "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"]
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler", // Recommended for modern TS projects, aligns with Vite
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true, // Helps catch unused variables
+    "noUnusedParameters": true, // Helps catch unused parameters
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "types": [
+      "@astrojs/cloudflare", // For Astro's Cloudflare integration types [cite: 243]
+      "@cloudflare/workers-types" // For direct Cloudflare Worker APIs and env bindings [cite: 230]
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@layouts/*": ["src/components/layout/*"],
+      "@lib/*": ["src/lib/*"],
+      "@assets/*": ["src/assets/*"],
+      "@styles/*": ["src/styles/*"],
+      "@types/*": ["src/types/*"],
+      "@content/*": ["src/content/*"], // For Astro Content Collections
+      "@server/*": ["src/server/*"] // Optional: for server-specific logic
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.astro",
+    "tests/**/*.ts",
+    "*.config.ts", // Include root config files like uno.config.ts
+    "*.config.mjs" // Include root config files like astro.config.mjs
+  ],
+  "exclude": ["node_modules", "dist", ".wrangler", ".mf"]
 }

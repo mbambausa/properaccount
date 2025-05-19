@@ -1,0 +1,138 @@
+# wrangler.toml
+name = "properaccount"
+compatibility_date = "2025-05-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Specifies the output directory for Cloudflare Pages builds.
+# This MUST be a simple string assignment.
+pages_build_output_dir = "./dist"
+
+# The [site] block is used by `wrangler pages dev` for serving static assets locally.
+[site]
+bucket = "./dist"
+
+# The [build] block for `wrangler.toml` is less critical when Astro handles its own build.
+# We can simplify or even remove it if Astro's build process is entirely independent.
+# For clarity with `wrangler pages dev`, we can keep a minimal `build.command`.
+[build]
+command = "npm run build" # Still useful to indicate the build command for context.
+# output_dir is covered by pages_build_output_dir for Pages deployments.
+
+# -----------------------------------------------------------------------------
+# Environment Configurations
+# -----------------------------------------------------------------------------
+
+[env.production]
+name = "properaccount-prod"
+workers_dev = false
+
+[[env.production.d1_databases]]
+binding = "DATABASE"
+database_name = "properaccount-db-prod"
+database_id = "<YOUR_PRODUCTION_DATABASE_ID>" # Replace
+migrations_dir = "src/cloudflare/d1/migrations"
+
+[[env.production.kv_namespaces]]
+binding = "CONFIG_KV"
+id = "<YOUR_PRODUCTION_CONFIG_KV_ID>" # Replace
+
+[[env.production.kv_namespaces]]
+binding = "REPORT_CACHE_KV"
+id = "<YOUR_PRODUCTION_REPORT_CACHE_KV_ID>" # Replace
+
+[[env.production.kv_namespaces]]
+binding = "SESSION_STORE" # KV binding for sessions, named SESSION_STORE for clarity
+# The adapter log mentioned "SESSION", you might need to use that exact binding name.
+# Let's use "SESSION_STORE" here but be prepared to change to "SESSION" if the error persists.
+# For consistency with the error message, let's use "SESSION":
+# binding = "SESSION"
+id = "<YOUR_PRODUCTION_SESSION_KV_ID>" # Replace
+
+[[env.production.r2_buckets]]
+binding = "DOCUMENTS_BUCKET"
+bucket_name = "properaccount-documents-prod"
+
+[[env.production.queues.producers]]
+queue = "background-tasks-prod"
+binding = "BACKGROUND_TASKS_QUEUE"
+
+[env.staging]
+name = "properaccount-staging"
+workers_dev = true
+
+[[env.staging.d1_databases]]
+binding = "DATABASE"
+database_name = "properaccount-db-staging"
+database_id = "<YOUR_STAGING_DATABASE_ID>" # Replace
+migrations_dir = "src/cloudflare/d1/migrations"
+
+[[env.staging.kv_namespaces]]
+binding = "CONFIG_KV"
+id = "<YOUR_STAGING_CONFIG_KV_ID>" # Replace
+
+[[env.staging.kv_namespaces]]
+binding = "REPORT_CACHE_KV"
+id = "<YOUR_STAGING_REPORT_CACHE_KV_ID>" # Replace
+
+[[env.staging.kv_namespaces]]
+binding = "SESSION_STORE" # Using SESSION_STORE, see note above.
+# binding = "SESSION" # If the adapter strictly requires "SESSION"
+id = "<YOUR_STAGING_SESSION_KV_ID>" # Replace
+
+[[env.staging.r2_buckets]]
+binding = "DOCUMENTS_BUCKET"
+bucket_name = "properaccount-documents-staging"
+
+[[env.staging.queues.producers]]
+queue = "background-tasks-staging"
+binding = "BACKGROUND_TASKS_QUEUE"
+
+# -----------------------------------------------------------------------------
+# Default Bindings (Used by `wrangler dev` / `wrangler pages dev --local`)
+# -----------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "properaccount-db-dev"
+database_id = "<YOUR_DEV_OR_PREVIEW_DATABASE_ID>" # Replace
+migrations_dir = "src/cloudflare/d1/migrations" # Path to D1 migration files.
+
+[[kv_namespaces]]
+binding = "CONFIG_KV"
+id = "<YOUR_DEV_OR_PREVIEW_CONFIG_KV_ID>" # Replace
+
+[[kv_namespaces]]
+binding = "REPORT_CACHE_KV"
+id = "<YOUR_DEV_OR_PREVIEW_REPORT_CACHE_KV_ID>" # Replace
+
+[[kv_namespaces]]
+binding = "SESSION_STORE" # Using SESSION_STORE, see note above.
+# binding = "SESSION" # If the adapter strictly requires "SESSION"
+# For local dev, Miniflare will simulate this. You don't need a real ID for local simulation.
+# However, providing a placeholder helps keep the structure.
+id = "local-session-kv-placeholder" # Placeholder for local dev simulation
+
+[[r2_buckets]]
+binding = "DOCUMENTS_BUCKET"
+bucket_name = "properaccount-documents-dev"
+
+[[queues.producers]]
+queue = "background-tasks-dev"
+binding = "BACKGROUND_TASKS_QUEUE"
+
+# -----------------------------------------------------------------------------
+# Secrets (Set via `wrangler secret put <KEY_NAME>`)
+# -----------------------------------------------------------------------------
+# - JWT_SECRET
+# - CSRF_SECRET
+# - GOOGLE_CLIENT_ID
+# - GOOGLE_CLIENT_SECRET
+
+# -----------------------------------------------------------------------------
+# Local Development Settings (`wrangler dev` or `wrangler pages dev`)
+# -----------------------------------------------------------------------------
+[dev]
+ip = "127.0.0.1"
+port = 8788
+local_protocol = "http"
+
+# Removed top-level [migrations] table as migrations_dir is specified per database.
