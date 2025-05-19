@@ -1,0 +1,236 @@
+---
+// src/pages/app/dashboard.astro
+import AppLayout from '@/components/layout/AppLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import ErrorBoundary from '@/components/ui/ErrorBoundary.astro';
+import type { User } from '@/types/auth';
+import type { CloudflareEnv } from '@/env';
+
+let user: User | undefined;
+let pageError: string | null = null;
+let entitiesData: any[] = [];
+
+const sessionCookie = Astro.cookies.get('session-token')?.value;
+
+if (!sessionCookie) {
+  return Astro.redirect('/auth/login?reason=session_expired');
+}
+
+try {
+  // This explicitly tells TypeScript to ignore the type of Astro.locals for this access.
+  const locals = Astro.locals as any; 
+  const runtime = locals.runtime;
+  const runtimeEnv = runtime?.env as CloudflareEnv | undefined;
+
+  if (!runtime || !runtimeEnv || !runtimeEnv.DATABASE) {
+    console.error(
+      "Critical Error: Astro.locals.runtime.env or DATABASE binding is not available. " +
+      "1. Verify src/env.d.ts is correct (should define App.Locals.runtime via @astrojs/cloudflare/env types). " +
+      "2. Ensure Cloudflare bindings are configured. " +
+      "3. Restart IDE & TypeScript Server. " +
+      "4. Delete .astro cache directory. " +
+      "5. Run 'npx astro check --verbose'.",
+      "Current Astro.locals keys:", Astro.locals ? Object.keys(Astro.locals) : "Astro.locals is undefined/null",
+      "Value of runtime after access/cast:", runtime 
+    );
+    pageError = "Server configuration error: Essential services unavailable.";
+  }
+  
+  if (runtimeEnv?.DATABASE && !pageError) { // Proceed only if db is available and no prior error
+    const db = runtimeEnv.DATABASE;
+
+    const sessionResult = await db.prepare(
+      'SELECT user_id, expires_at FROM sessions WHERE id = ?'
+    ).bind(sessionCookie).first<{ user_id: string; expires_at: string | number }>();
+
+    let sessionExpiresAt: Date;
+    if (sessionResult?.expires_at) {
+      if (typeof sessionResult.expires_at === 'string') {
+        sessionExpiresAt = new Date(sessionResult.expires_at);
+      } else if (typeof sessionResult.expires_at === 'number') {
+        sessionExpiresAt = new Date(sessionResult.expires_at * 1000);
+      } else {
+        throw new Error("Invalid session expiration format from database.");
+      }
+    } else {
+      throw new Error("Session not found or critical expiration data missing from database.");
+    }
+    
+    if (sessionExpiresAt < new Date()) {
+      Astro.cookies.delete('session-token', { path: '/' });
+      return Astro.redirect('/auth/login?reason=session_invalid_or_expired');
+    }
+    
+    const userResult = await db.prepare(
+      'SELECT id, name, email, role, created_at AS createdAt, updated_at AS updatedAt, verified_at AS verifiedAt, image_url AS imageUrl FROM users WHERE id = ?'
+    ).bind(sessionResult.user_id).first<User>();
+    
+    if (!userResult) {
+      Astro.cookies.delete('session-token', { path: '/' });
+      return Astro.redirect('/auth/login?reason=user_not_found');
+    }
+    user = userResult;
+    
+    // Get entities data (if any)
+    try {
+      // This is where you would fetch entity data from the database
+      // For now, we'll leave it as an empty array
+      entitiesData = [];
+    } catch (entityError: any) {
+      console.error('Error loading entities:', entityError.message);
+      // Don't set pageError here - we'll display a more specific error for entities
+    }
+    
+  } else if (!pageError) { 
+    pageError = "Database service is not available due to configuration issues.";
+  }
+  
+} catch (error: any) {
+  console.error('Dashboard setup error:', error.message, error.stack);
+  if (!pageError) pageError = error.message || 'Could not load dashboard data. Please ensure you are logged in.';
+}
+---
+
+<AppLayout title="Dashboard" user={user}>
+  <ErrorBoundary>
+    <div class="space-y-8">
+      <header>
+        <h1 class="text-3xl font-bold text-neutral-900 dark:text-white">Dashboard</h1>
+        {user && <p class="mt-1 text-lg text-neutral-600 dark:text-neutral-300">Welcome back, {user.name || user.email}!</p>}
+        {!user && !pageError && <p class="mt-1 text-lg text-yellow-600 dark:text-yellow-400">Loading user data...</p>}
+      </header>
+
+      {pageError && (
+        <Card variant="outline" class="border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <div class="i-carbon-warning-alt h-5 w-5 text-red-500 dark:text-red-400 mt-0.5"></div>
+            </div>
+            <div class="ml-3">
+              <p class="font-medium">Dashboard Error:</p>
+              <p>{pageError}</p>
+              <button 
+                id="retry-button"
+                class="mt-2 text-sm font-medium text-red-600 dark:text-red-400 hover:underline"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
+      
+      <section aria-labelledby="financial-summary-title">
+        <h2 id="financial-summary-title" class="text-xl font-semibold text-neutral-800 dark:text-neutral-200 mb-4">Financial Summary</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card title="Net Worth" class="shadow-lg">
+            <p class="text-3xl font-bold tabular-nums">$1,070,000.00</p>
+            <div class="mt-2 flex items-center text-sm">
+              <span class="text-green-600 dark:text-green-400 font-medium flex items-center">
+                <div class="i-carbon-arrow-up mr-1 h-4 w-4"></div>+5.2%
+              </span>
+              <span class="text-neutral-500 dark:text-neutral-400 ml-2">from last month</span>
+            </div>
+          </Card>
+          <Card title="Total Assets" class="shadow-lg">
+            <p class="text-3xl font-bold tabular-nums">$2,450,000.00</p>
+            <div class="mt-2 flex items-center text-sm">
+              <span class="text-green-600 dark:text-green-400 font-medium flex items-center">
+                <div class="i-carbon-arrow-up mr-1 h-4 w-4"></div>+3.8%
+              </span>
+              <span class="text-neutral-500 dark:text-neutral-400 ml-2">from last month</span>
+            </div>
+          </Card>
+          <Card title="Total Liabilities" class="shadow-lg">
+            <p class="text-3xl font-bold tabular-nums">$1,380,000.00</p>
+            <div class="mt-2 flex items-center text-sm">
+              <span class="text-red-600 dark:text-red-400 font-medium flex items-center">
+                <div class="i-carbon-arrow-down mr-1 h-4 w-4"></div>+1.2%
+              </span>
+              <span class="text-neutral-500 dark:text-neutral-400 ml-2">from last month</span>
+            </div>
+          </Card>
+        </div>
+      </section>
+      
+      <section aria-labelledby="properties-title">
+        <div class="flex justify-between items-center mb-4">
+          <h2 id="properties-title" class="text-xl font-semibold text-neutral-800 dark:text-neutral-200">Your Properties</h2>
+          <a href="/app/entities/new" class="btn btn-primary btn-sm text-sm">
+            <div class="i-carbon-add mr-1.5 h-4 w-4" aria-hidden="true"></div>
+            Add Property
+          </a>
+        </div>
+        <Card noPadding class="shadow-lg">
+          <ul class="divide-y divide-neutral-200 dark:divide-neutral-700">
+            {entitiesData && entitiesData.length > 0 ? entitiesData.map(entity => (
+              <li class="hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors">
+                <a href={`/app/entities/${entity.id}`} class="block px-4 py-4 sm:px-6">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                      <div class="flex-shrink-0 h-10 w-10 bg-primary-100 dark:bg-primary-800 rounded-full flex items-center justify-center">
+                        <span class="text-primary-700 dark:text-primary-300 font-medium">
+                          {entity.name?.substring(0,2).toUpperCase() || 'P'}
+                        </span>
+                      </div>
+                      <div class="ml-4">
+                        <div class="text-sm font-medium text-neutral-900 dark:text-white">{entity.name}</div>
+                        <div class="text-sm text-neutral-500 dark:text-neutral-400">{entity.type || 'Property'}</div>
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              </li>
+            )) : !pageError && ( 
+              <div class="p-6 text-center text-neutral-500 dark:text-neutral-400">
+                  You haven't added any properties yet.
+                  <a href="/app/entities/new" class="font-medium text-primary-600 dark:text-primary-400 hover:underline">Add your first property</a>.
+              </div>
+            )}
+          </ul>
+        </Card>
+      </section>
+      
+      <section aria-labelledby="transactions-title" class="hidden lg:block">
+        <div class="flex justify-between items-center mb-4">
+          <h2 id="transactions-title" class="text-xl font-semibold text-neutral-800 dark:text-neutral-200">Recent Transactions</h2>
+          <a href="/app/transactions" class="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline">
+            View all
+          </a>
+        </div>
+        <Card noPadding class="shadow-lg">
+          <div class="p-6 text-center text-neutral-500 dark:text-neutral-400">
+            No recent transactions to display.
+            <a href="/app/transactions/new" class="font-medium text-primary-600 dark:text-primary-400 hover:underline ml-1">
+              Record a transaction
+            </a>
+          </div>
+        </Card>
+      </section>
+    </div>
+  </ErrorBoundary>
+</AppLayout>
+
+<script>
+  // Handle retry button click
+  document.addEventListener('DOMContentLoaded', () => {
+    const retryButton = document.getElementById('retry-button');
+    if (retryButton) {
+      retryButton.addEventListener('click', () => {
+        if (window.showToast) {
+          window.showToast('info', 'Refreshing dashboard data...', 2000);
+        }
+        // Reload the page
+        window.location.reload();
+      });
+    }
+
+    // Show welcome toast for returning users
+    const user = document.querySelector('h1 + p')?.textContent;
+    if (user && !sessionStorage.getItem('dashboardVisited') && window.showToast) {
+      const name = user.replace('Welcome back, ', '').replace('!', '');
+      window.showToast('success', `Welcome back, ${name}!`, 5000);
+      sessionStorage.setItem('dashboardVisited', 'true');
+    }
+  });
+</script>

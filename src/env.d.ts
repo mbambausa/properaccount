@@ -1,26 +1,49 @@
-// env.d.ts
+// src/env.d.ts
 /// <reference types="astro/client" />
-/// <reference types="@astrojs/cloudflare" />
+/// <reference types="@astrojs/cloudflare/env" /> 
 /// <reference types="@cloudflare/workers-types" />
 
-interface CloudflareEnv {
+import type { Alpine as AlpineType } from 'alpinejs';
+
+// This interface defines the shape of your Cloudflare bindings and secrets.
+export interface CloudflareEnv {
   DATABASE: D1Database;
   CONFIG_KV: KVNamespace;
   REPORT_CACHE_KV: KVNamespace;
-  SESSION: KVNamespace; // Assuming you named the binding 'SESSION' for the KV session store
+  SESSION_KV: KVNamespace;
   DOCUMENTS_BUCKET: R2Bucket;
   BACKGROUND_TASKS_QUEUE: Queue;
 
-  // Secrets (should match what you set with `wrangler secret put`)
+  // Secrets
   JWT_SECRET: string;
-  SESSION_SECRET: string; // <--- ADD THIS LINE if not already present
+  SESSION_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  // CSRF_SECRET?: string; // Add if you implement and set this
+  CSRF_SECRET: string;
 }
 
+declare global {
+  interface Window {
+    eruda?: { init: (config?: any) => void; };
+    Alpine?: AlpineType;
+    // Added global toggleTheme function from ThemeScript.astro
+    toggleTheme?: () => void;
+  }
+  const eruda: Window['eruda'];
+  const Alpine: AlpineType;
+}
+
+// Explicitly augment Astro's App.Locals to ensure Cloudflare types work
 declare namespace App {
   interface Locals {
+    // Using explicit reference to avoid type confusion
+    runtime: {
+      env: CloudflareEnv;
+      cf?: import('@cloudflare/workers-types').CfProperties;
+      ctx?: ExecutionContext;
+      name?: string;
+    };
+
     user?: {
       id: string;
       email: string;
@@ -28,21 +51,25 @@ declare namespace App {
       role: string;
     };
     sessionId?: string;
-    // Make Cloudflare bindings available in Astro components and API routes
-    cloudflare: {
-      env: CloudflareEnv;
-      context: ExecutionContext;
-    }
+    session?: Record<string, any>;
   }
 }
 
-// For import.meta.env (client-side and build-time server-side)
-interface ImportMetaEnv {
-  readonly PUBLIC_APP_URL: string;
-  readonly PUBLIC_DEV_MODE?: string; // From your .env
-  // Add other PUBLIC_ prefixed variables here
+declare global {
+  interface Window {
+    toastSystem?: {
+      show: (type: 'success' | 'error' | 'warning' | 'info', message: string, duration?: number) => string;
+      remove: (id: string) => void;
+    };
+    showToast?: (type: 'success' | 'error' | 'warning' | 'info', message: string, duration?: number) => string | null;
+  }
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
+interface ImportMetaEnv {
+  readonly PUBLIC_APP_URL: string;
+  readonly PUBLIC_DEV_MODE?: string;
+  readonly NODE_ENV?: 'development' | 'production' | 'test';
 }
+interface ImportMeta { readonly env: ImportMetaEnv; }
+
+export {};

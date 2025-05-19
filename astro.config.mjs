@@ -6,21 +6,21 @@ import UnoCSS from "unocss/astro";
 
 // https://astro.build/config
 export default defineConfig({
-  output: "server", // Necessary for SSR and API endpoints [cite: 175, 986]
+  output: "server", // Necessary for SSR and API endpoints
   adapter: cloudflare({
-    mode: "directory", // Recommended for Cloudflare Pages [cite: 12]
+    mode: "directory", // Recommended for Cloudflare Pages
     functionPerRoute: false, // Generally a good default to reduce function counts
     runtime: {
-      // Local development runtime settings for wrangler [cite: 12]
+      // Local development runtime settings for wrangler
       mode: "local", // Uses Miniflare for local development
       persistToStorage: true, // Persists D1, KV, R2 data locally during dev
     },
   }),
   integrations: [
-    alpinejs(), // For lightweight client-side interactivity [cite: 1002, 1149]
+    alpinejs(), // For lightweight client-side interactivity
     UnoCSS({
-      // For atomic CSS styling [cite: 1165]
-      injectReset: true, // Applies a CSS reset like Tailwind's preflight [cite: 1165]
+      // For atomic CSS styling
+      injectReset: true, // Applies a CSS reset like Tailwind's preflight
     }),
   ],
   vite: {
@@ -29,7 +29,7 @@ export default defineConfig({
     },
     ssr: {
       // Ensure decimal.js is bundled with the server output,
-      // as it's crucial for financial calculations [cite: 1077, 1110]
+      // as it's crucial for financial calculations
       noExternal: ["decimal.js"],
     },
   },

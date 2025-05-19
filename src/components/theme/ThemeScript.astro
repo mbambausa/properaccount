@@ -1,0 +1,27 @@
+---
+// src/components/theme/ThemeScript.astro
+// This component provides standardized theme detection and a global toggling function.
+// Import it in layout components to ensure consistent theme behavior.
+---
+
+<script is:inline>
+  // Apply theme based on localStorage or system preference
+  (function() {
+    if (localStorage.getItem('color-theme') === 'dark' || 
+        (!('color-theme' in localStorage) && 
+         window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark'); // Explicitly set to light or remove dark
+    }
+  })();
+</script>
+
+<script is:inline>
+  window.toggleTheme = function() {
+    // Toggle the 'dark' class on the <html> element
+    const isDark = document.documentElement.classList.toggle('dark');
+    // Update localStorage with the new theme preference
+    localStorage.setItem('color-theme', isDark ? 'dark' : 'light');
+  };
+</script>

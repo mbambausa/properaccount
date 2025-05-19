@@ -1,0 +1,209 @@
+---
+// src/components/ui/Form.astro
+export interface Props {
+  action?: string;
+  method?: 'get' | 'post' | 'put' | 'delete' | 'patch';
+  id?: string;
+  class?: string;
+  layout?: 'vertical' | 'horizontal';
+  fieldSpacing?: 'tight' | 'normal' | 'loose';
+  autoComplete?: string;
+  noValidate?: boolean;
+  preventDefaults?: boolean;
+  enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data' | 'text/plain' | 'application/json';
+  'data-testid'?: string;
+}
+
+const {
+  action,
+  method = 'post',
+  id,
+  class: userClassName = '',
+  layout = 'vertical',
+  fieldSpacing = 'normal',
+  autoComplete,
+  noValidate,
+  preventDefaults = false,
+  enctype = 'application/x-www-form-urlencoded',
+  'data-testid': dataTestId,
+} = Astro.props;
+
+const layoutClasses = {
+  vertical: '',
+  horizontal: 'lg:grid lg:grid-cols-12 lg:gap-x-6',
+};
+
+const fieldSpacingClasses = {
+  tight: 'space-y-2',
+  normal: 'space-y-4',
+  loose: 'space-y-6',
+};
+
+const formHtmlMethod = method.toUpperCase() === 'GET' ? 'GET' : 'POST';
+---
+
+<form
+  id={id}
+  action={action}
+  method={formHtmlMethod}
+  class={`${layoutClasses[layout]} ${fieldSpacingClasses[fieldSpacing]} ${userClassName}`}
+  autocomplete={autoComplete}
+  novalidate={noValidate}
+  {...(preventDefaults ? { 'data-prevent-defaults': 'true' } : {})}
+  enctype={enctype}
+  data-testid={dataTestId}
+  {...(preventDefaults && method.toUpperCase() !== 'GET' ? { 'data-method': method.toUpperCase() } : {})}
+>
+  <slot />
+</form>
+
+{preventDefaults && (
+  <script>
+    // Define the allowed enctype values for use within this script
+    type AllowedFormEnctype = 
+      | 'application/x-www-form-urlencoded' 
+      | 'multipart/form-data' 
+      | 'text/plain' 
+      | 'application/json'
+      | null; // getAttribute can return null
+
+    const originalButtonContentStore = new Map<HTMLButtonElement, string>();
+
+    function setButtonLoadingState(button: HTMLButtonElement, isLoading: boolean) {
+      if (isLoading) {
+        button.setAttribute('disabled', 'true');
+        button.classList.add('opacity-75', 'cursor-not-allowed');
+        button.setAttribute('aria-busy', 'true');
+        
+        if (!originalButtonContentStore.has(button)) {
+          originalButtonContentStore.set(button, button.innerHTML);
+        }
+
+        if (!button.querySelector('.form-submit-spinner')) {
+          const spinnerHTML = `
+            <span class="inline-flex items-center leading-none">
+              <svg
+                class="animate-spin -ml-0.5 mr-2 h-4 w-4 text-current form-submit-spinner"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                role="status"
+                aria-hidden="true"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </span>`;
+          button.innerHTML = spinnerHTML + (originalButtonContentStore.get(button) || '');
+        }
+      } else {
+        button.removeAttribute('disabled');
+        button.classList.remove('opacity-75', 'cursor-not-allowed');
+        button.removeAttribute('aria-busy');
+        if (originalButtonContentStore.has(button)) {
+          button.innerHTML = originalButtonContentStore.get(button) as string;
+          originalButtonContentStore.delete(button);
+        }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const forms = document.querySelectorAll('form[data-prevent-defaults="true"]');
+      
+      forms.forEach(formEl => {
+        const form = formEl as HTMLFormElement;
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const formData = new FormData(form);
+          const actionUrl = form.getAttribute('action') || window.location.href;
+          const formMethodAttr = form.dataset.method?.toUpperCase() || form.method?.toUpperCase() || 'POST';
+          // Use the locally defined type for formEnctype
+          const formEnctype = form.getAttribute('enctype') as AllowedFormEnctype;
+
+          const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]')) as HTMLButtonElement[];
+          submitButtons.forEach(btn => setButtonLoadingState(btn, true));
+          
+          let responseResult: any = null; 
+          let responseOk = false;
+          let responseStatus = 0;
+
+          try {
+            const headers = new Headers();
+            let body: BodyInit | null = null;
+
+            if (formEnctype === 'application/json') {
+              const object: Record<string, FormDataEntryValue> = {};
+              formData.forEach((value, key) => { object[key] = value; });
+              body = JSON.stringify(object);
+              headers.set('Content-Type', 'application/json');
+            } else if (formMethodAttr !== 'GET' && formMethodAttr !== 'HEAD') {
+              body = formData;
+              // For multipart/form-data, browser sets Content-Type.
+              // For other enctypes like application/x-www-form-urlencoded or text/plain, set it if specified.
+              if(formEnctype && formEnctype !== 'multipart/form-data') {
+                headers.set('Content-Type', formEnctype);
+              }
+            }
+            
+            headers.set('Accept', 'application/json, text/html, */*');
+            
+            const csrfTokenInput = form.querySelector('input[name="_csrf"]') as HTMLInputElement | null;
+            if (csrfTokenInput?.value) {
+              headers.set('X-CSRF-Token', csrfTokenInput.value);
+            } else {
+              // Fallback: Check for meta tag if you use that pattern elsewhere
+              const csrfMeta = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null);
+              if (csrfMeta?.content) {
+                headers.set('X-CSRF-Token', csrfMeta.content);
+              }
+            }
+
+            const fetchOptions: RequestInit = {
+              method: formMethodAttr,
+              headers,
+            };
+            if (body) {
+              fetchOptions.body = body;
+            }
+            
+            const response = await fetch(actionUrl, fetchOptions);
+            responseOk = response.ok;
+            responseStatus = response.status;
+
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              responseResult = await response.json();
+            } else {
+              responseResult = { responseText: await response.text(), status: response.status }; 
+            }
+            
+            form.dispatchEvent(new CustomEvent('form:response', { 
+              detail: { result: responseResult, success: responseOk, status: responseStatus },
+              bubbles: true 
+            }));
+            
+            if (responseOk && responseResult && typeof responseResult === 'object' && responseResult.redirectUrl) {
+              window.location.href = responseResult.redirectUrl;
+            }
+
+          } catch (error) {
+            console.error('Form submission error:', error);
+            form.dispatchEvent(new CustomEvent('form:error', { 
+              detail: { 
+                error: error instanceof Error ? error.message : String(error), 
+                result: responseResult, 
+                success: false,
+                status: responseStatus 
+              },
+              bubbles: true 
+            }));
+          } finally {
+            submitButtons.forEach(btn => setButtonLoadingState(btn, false));
+          }
+        });
+      });
+    });
+  </script>
+)}

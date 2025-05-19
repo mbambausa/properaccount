@@ -1,0 +1,73 @@
+---
+// src/components/layout/BaseLayout.astro
+import '@/styles/global.css';
+import ThemeScript from '@/components/theme/ThemeScript.astro';
+import DebugTools from '@/components/dev/DebugTools.astro';
+import ViewTransitions from '@/components/layout/ViewTransitions.astro';
+import ToastContainer from '@/components/ui/ToastContainer.astro';
+
+export interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "ProperAccount - Real Estate Accounting" } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en" class="font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content={description}>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>{title}</title>
+  <ThemeScript />
+  <ViewTransitions />
+  <DebugTools />
+</head>
+<body class="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 antialiased">
+  <!-- Accessibility skip link -->
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-white dark:focus:bg-neutral-800 focus:text-primary-600 focus:top-0 focus:left-0">
+    Skip to main content
+  </a>
+  
+  <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+      <a href="/" class="flex items-center space-x-2 group">
+        <div class="h-8 w-8 bg-primary-600 rounded-md flex items-center justify-center text-white font-bold text-lg group-hover:bg-primary-700 transition-colors">
+          PA
+        </div>
+        <span class="text-xl font-semibold text-neutral-800 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">ProperAccount</span>
+      </a>
+      <div class="flex items-center space-x-4">
+        <a href="/auth/login" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Sign in</a>
+        <button 
+          id="theme-toggle" 
+          type="button"
+          class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700"
+          aria-label="Toggle theme"
+        >
+          <div id="dark-icon" class="i-carbon-moon h-5 w-5 hidden dark:block"></div>
+          <div id="light-icon" class="i-carbon-sun h-5 w-5 block dark:hidden"></div>
+        </button>
+      </div>
+    </div>
+  </header>
+  
+  <!-- Main content with ID for skip link -->
+  <main id="main-content">
+    <slot />
+  </main>
+  
+  <ToastContainer />
+  
+  <script is:inline>
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+      if (typeof window.toggleTheme === 'function') {
+        window.toggleTheme();
+      }
+    });
+  </script>
+</body>
+</html>

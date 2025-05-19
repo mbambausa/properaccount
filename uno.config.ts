@@ -1,122 +1,73 @@
 // uno.config.ts
 import {
   defineConfig,
-  presetUno,
   presetIcons,
   presetTypography,
-} from "unocss";
-import type { UserConfig } from "unocss"; // Changed to type-only import
+} from 'unocss';
+import presetUno from '@unocss/preset-uno';
 
 export default defineConfig({
   presets: [
-    presetUno(), // Basic UnoCSS preset (similar to Tailwind)
+    presetUno(),
     presetIcons({
-      // Icon preset
       scale: 1.2,
+      extraProperties: {
+        'display': 'inline-block',
+        'vertical-align': 'middle',
+      },
       collections: {
-        carbon: () =>
-          import("@iconify-json/carbon/icons.json").then((i) => i.default),
+        carbon: () => import('@iconify-json/carbon/icons.json').then(i => i.default),
       },
     }),
-    presetTypography(), // Typography preset for prose styling
+    presetTypography(),
   ],
-  shortcuts: {
-    // Custom utility shortcuts
-    'btn': "py-2 px-4 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-    'btn-primary':
-      "btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-400",
-    'btn-secondary':
-      "btn bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-400 dark:bg-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-600",
-    'input':
-      "px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-300 transition-colors w-full dark:bg-neutral-700 dark:border-neutral-600 dark:focus:ring-primary-500 dark:focus:border-primary-500",
-    'card': "bg-white rounded-lg shadow p-4 dark:bg-neutral-800 dark:shadow-neutral-700/50",
-    'card-header':
-      "px-4 py-3 border-b border-neutral-200 dark:border-neutral-700",
-    'form-group': "mb-4",
-    'form-label':
-      "block text-sm font-medium text-gray-700 mb-1 dark:text-neutral-300",
-    'container': "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
-    'heading-1':
-      "text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-5xl lg:text-6xl",
-    'heading-2':
-      "text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl",
-    'heading-3':
-      "text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl",
-    'link': "text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300 underline",
-  },
+  shortcuts: [
+    { 'input': 'block w-full rounded-md border-neutral-300 dark:border-neutral-600 shadow-sm focus:border-primary-500 focus:ring focus:ring-primary-500 focus:ring-opacity-50 bg-white dark:bg-neutral-700 dark:text-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2' },
+    { 'input-error': 'border-red-500 focus:border-red-500 focus:ring-red-500' },
+    { 'btn': 'inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed' },
+    { 'btn-primary': 'btn bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 focus:ring-primary-500' },
+    { 'btn-secondary': 'btn bg-neutral-200 text-neutral-700 hover:bg-neutral-300 dark:bg-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-600 focus:ring-primary-500' },
+    { 'card': 'bg-white dark:bg-neutral-800 rounded-lg shadow-md overflow-hidden' },
+    { 'card-header': 'px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 sm:px-6'},
+    { 'card-body': 'p-4 sm:p-6'},
+    { 'card-footer': 'px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-200 dark:border-neutral-700 sm:px-6'},
+  ],
   theme: {
-    // Theme customization
     colors: {
+      // Define colors using HSL values directly to match CSS variables
       primary: {
-        // Example primary color palette, aligned with user's initial theme
-        "50": "#eff6ff", // Lightest shade
-        "100": "#dbeafe",
-        "200": "#bfdbfe",
-        "300": "#93c5fd",
-        "400": "#60a5fa",
-        "500": "#3b82f6", // A common blue-500
-        "600": "#2563eb",
-        "700": "#1d4ed8",
-        "800": "#1e40af",
-        "900": "#1e3a8a",
-        "950": "#172554",
+        DEFAULT: 'hsl(var(--color-primary-600))',
+        50: 'hsl(var(--color-primary-50))',
+        100: 'hsl(var(--color-primary-100))',
+        200: 'hsl(var(--color-primary-200))',
+        300: 'hsl(var(--color-primary-300))',
+        400: 'hsl(var(--color-primary-400))',
+        500: 'hsl(var(--color-primary-500))',
+        600: 'hsl(var(--color-primary-600))',
+        700: 'hsl(var(--color-primary-700))',
+        800: 'hsl(var(--color-primary-800))',
+        900: 'hsl(var(--color-primary-900))',
+        950: 'hsl(var(--color-primary-950))',
       },
       neutral: {
-        // Neutral colors for backgrounds, text, borders, especially in dark mode
-        50: "#fafafa",
-        100: "#f5f5f5",
-        200: "#e5e5e5",
-        300: "#d4d4d4",
-        400: "#a3a3a3",
-        500: "#737373",
-        600: "#525252",
-        700: "#404040",
-        800: "#262626",
-        900: "#171717",
-        950: "#0a0a0a",
+        DEFAULT: 'hsl(var(--color-neutral-500))',
+        50: 'hsl(var(--color-neutral-50))',
+        100: 'hsl(var(--color-neutral-100))',
+        200: 'hsl(var(--color-neutral-200))',
+        300: 'hsl(var(--color-neutral-300))',
+        400: 'hsl(var(--color-neutral-400))',
+        500: 'hsl(var(--color-neutral-500))',
+        600: 'hsl(var(--color-neutral-600))',
+        700: 'hsl(var(--color-neutral-700))',
+        800: 'hsl(var(--color-neutral-800))',
+        900: 'hsl(var(--color-neutral-900))',
+        950: 'hsl(var(--color-neutral-950))',
       },
+      success: 'hsl(var(--color-success))',
+      danger: 'hsl(var(--color-danger))',
     },
     fontFamily: {
-      sans: [
-        "Inter",
-        "ui-sans-serif",
-        "system-ui",
-        "-apple-system",
-        "BlinkMacSystemFont",
-        '"Segoe UI"',
-        "Roboto",
-        '"Helvetica Neue"',
-        "Arial",
-        '"Noto Sans"',
-        "sans-serif",
-        '"Apple Color Emoji"',
-        '"Segoe UI Emoji"',
-        '"Segoe UI Symbol"',
-        '"Noto Color Emoji"',
-      ],
-      // serif: [...],
-      // mono: [...],
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans"', 'sans-serif', '"Apple Color Emoji"', '"Segoe UI Emoji"', '"Segoe UI Symbol"', '"Noto Color Emoji"'],
     },
   },
-  // Configuration for dark mode using a class strategy
-  darkMode: "class",
-  // Content scanning configuration for Astro projects
-  content: {
-    pipeline: {
-      include: [
-        /\.(astro|html|js|jsx|md|mdx|svelte|ts|tsx|vue)($|\?)/,
-        "astro.config.mjs",
-        "uno.config.ts",
-      ],
-      exclude: [
-        "node_modules/**/*",
-        ".git/**/*",
-        "dist/**/*",
-        ".astro/**/*",
-        ".wrangler/**/*",
-      ],
-    },
-  },
-  // Build-time strategy for edge deployments to generate separate CSS chunks for better caching
-  mode: "dist-chunk",
-} as UserConfig); // Keeping 'as UserConfig' for now, in case the darkMode issue was separate
+});

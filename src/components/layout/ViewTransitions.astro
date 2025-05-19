@@ -1,0 +1,40 @@
+---
+// src/components/layout/ViewTransitions.astro
+// Import Astro's built-in view transitions
+import { ViewTransitions as AstroViewTransitions } from 'astro:transitions';
+---
+
+<AstroViewTransitions />
+
+<script>
+  // Optional: Add custom logic for view transitions
+  document.addEventListener('astro:page-load', () => {
+    // Initialize any components that need it after page navigation
+    if (window.Alpine) {
+      window.Alpine.initTree(document.body);
+    }
+    
+    // Scroll to top or handle anchor links
+    const hash = window.location.hash;
+    if (hash) {
+      const element = document.getElementById(hash.substring(1));
+      if (element) {
+        element.scrollIntoView();
+      }
+    } else {
+      window.scrollTo(0, 0);
+    }
+  });
+
+  // Handle transition failures
+  document.addEventListener('astro:after-swap', () => {
+    // Re-apply theme after page swap
+    if (localStorage.getItem('color-theme') === 'dark' || 
+        (!('color-theme' in localStorage) && 
+         window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  });
+</script>

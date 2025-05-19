@@ -3,10 +3,12 @@
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "moduleResolution": "bundler", // Recommended for modern TS projects, aligns with Vite
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "esModuleInterop": true,
     "noEmit": true,
     "strict": true,
     "noImplicitAny": true,
@@ -17,14 +19,14 @@
     "noImplicitThis": true,
     "useUnknownInCatchVariables": true,
     "alwaysStrict": true,
-    "noUnusedLocals": true, // Helps catch unused variables
-    "noUnusedParameters": true, // Helps catch unused parameters
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "types": [
-      "@astrojs/cloudflare", // For Astro's Cloudflare integration types [cite: 243]
-      "@cloudflare/workers-types" // For direct Cloudflare Worker APIs and env bindings [cite: 230]
+      "@cloudflare/workers-types"
     ],
     "baseUrl": ".",
     "paths": {
@@ -35,16 +37,19 @@
       "@assets/*": ["src/assets/*"],
       "@styles/*": ["src/styles/*"],
       "@types/*": ["src/types/*"],
-      "@content/*": ["src/content/*"], // For Astro Content Collections
-      "@server/*": ["src/server/*"] // Optional: for server-specific logic
-    }
+      "@content/*": ["src/content/*"],
+      "@server/*": ["src/server/*"]
+    },
+    "jsx": "preserve",
+    "jsxImportSource": "astro"
   },
   "include": [
+    "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.astro",
     "tests/**/*.ts",
-    "*.config.ts", // Include root config files like uno.config.ts
-    "*.config.mjs" // Include root config files like astro.config.mjs
+    "*.config.ts",
+    "*.config.mjs"
   ],
-  "exclude": ["node_modules", "dist", ".wrangler", ".mf"]
+  "exclude": ["node_modules", "dist", ".wrangler", ".mf", ".DS_Store"]
 }

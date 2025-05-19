@@ -1,0 +1,85 @@
+---
+// src/components/ui/FormField.astro
+export interface Props {
+  id: string;
+  label: string;
+  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'date' | 'time' | 'datetime-local' | 'url';
+  required?: boolean;
+  error?: string;
+  value?: string | number;
+  name?: string;
+  placeholder?: string;
+  class?: string;
+  helpText?: string;
+  autocomplete?: string;
+  disabled?: boolean;
+  min?: string | number;
+  max?: string | number;
+  step?: string | number;
+  pattern?: string;
+  minlength?: string | number; // Added minlength property
+  maxlength?: string | number; // Added maxlength for completeness
+}
+
+const {
+  id,
+  label,
+  type = 'text',
+  required = false,
+  error,
+  value = '',
+  name = id,
+  placeholder,
+  class: className = '',
+  helpText,
+  autocomplete,
+  disabled = false,
+  min,
+  max,
+  step,
+  pattern,
+  minlength, // Include in destructuring
+  maxlength, // Include in destructuring
+} = Astro.props;
+---
+
+<div class="mb-4">
+  <label for={id} class="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+    {label}{required && <span class="text-red-500 ml-1">*</span>}
+  </label>
+  
+  <input
+    id={id}
+    name={name}
+    type={type}
+    value={value}
+    placeholder={placeholder}
+    class={`input w-full ${error ? 'input-error' : ''} ${className}`}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={
+      (error ? `${id}-error` : '') + 
+      (helpText ? (error ? ' ' : '') + `${id}-description` : '')
+    }
+    required={required}
+    autocomplete={autocomplete}
+    disabled={disabled}
+    min={min}
+    max={max}
+    step={step}
+    pattern={pattern}
+    minlength={minlength}
+    maxlength={maxlength}
+  />
+  
+  {helpText && (
+    <p id={`${id}-description`} class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+      {helpText}
+    </p>
+  )}
+  
+  {error && (
+    <p id={`${id}-error`} class="mt-1 text-sm text-red-600 dark:text-red-400">
+      {error}
+    </p>
+  )}
+</div>
