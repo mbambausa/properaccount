@@ -4,19 +4,15 @@ compatibility_date = "2025-05-18"
 compatibility_flags = ["nodejs_compat"]
 
 # Specifies the output directory for Cloudflare Pages builds.
-# This MUST be a simple string assignment.
 pages_build_output_dir = "./dist"
 
 # The [site] block is used by `wrangler pages dev` for serving static assets locally.
 [site]
 bucket = "./dist"
 
-# The [build] block for `wrangler.toml` is less critical when Astro handles its own build.
-# We can simplify or even remove it if Astro's build process is entirely independent.
-# For clarity with `wrangler pages dev`, we can keep a minimal `build.command`.
+# Build command (Astro handles its own build process).
 [build]
-command = "npm run build" # Still useful to indicate the build command for context.
-# output_dir is covered by pages_build_output_dir for Pages deployments.
+command = "npm run build"
 
 # -----------------------------------------------------------------------------
 # Environment Configurations
@@ -28,29 +24,25 @@ workers_dev = false
 
 [[env.production.d1_databases]]
 binding = "DATABASE"
-database_name = "properaccount-db-prod"
-database_id = "<YOUR_PRODUCTION_DATABASE_ID>" # Replace
+database_name = "properaccount-db-prod" # Should match the name of your D1 DB in Cloudflare, e.g., "properaccount-db"
+database_id = "bc1c31a7-957e-4086-aa55-54384fe0c80a" # Populated from your provided ID
 migrations_dir = "src/cloudflare/d1/migrations"
 
 [[env.production.kv_namespaces]]
 binding = "CONFIG_KV"
-id = "<YOUR_PRODUCTION_CONFIG_KV_ID>" # Replace
+id = "d34d0bbafca1424d8c678aade9a60dce" # Populated from your provided ID for "ProperAccount" KV
 
 [[env.production.kv_namespaces]]
 binding = "REPORT_CACHE_KV"
-id = "<YOUR_PRODUCTION_REPORT_CACHE_KV_ID>" # Replace
+id = "<YOUR_PRODUCTION_REPORT_CACHE_KV_ID>" # Replace: Create this KV namespace in Cloudflare and add its ID
 
 [[env.production.kv_namespaces]]
-binding = "SESSION_STORE" # KV binding for sessions, named SESSION_STORE for clarity
-# The adapter log mentioned "SESSION", you might need to use that exact binding name.
-# Let's use "SESSION_STORE" here but be prepared to change to "SESSION" if the error persists.
-# For consistency with the error message, let's use "SESSION":
-# binding = "SESSION"
-id = "<YOUR_PRODUCTION_SESSION_KV_ID>" # Replace
+binding = "SESSION" # Changed from SESSION_STORE to SESSION as per adapter warning
+id = "<YOUR_PRODUCTION_SESSION_KV_ID>" # Replace: Create this KV namespace for sessions and add its ID
 
 [[env.production.r2_buckets]]
 binding = "DOCUMENTS_BUCKET"
-bucket_name = "properaccount-documents-prod"
+bucket_name = "properaccount-documents-prod" # Ensure this R2 bucket exists (e.g., "real-estate-documents-prod")
 
 [[env.production.queues.producers]]
 queue = "background-tasks-prod"
@@ -63,65 +55,67 @@ workers_dev = true
 [[env.staging.d1_databases]]
 binding = "DATABASE"
 database_name = "properaccount-db-staging"
-database_id = "<YOUR_STAGING_DATABASE_ID>" # Replace
+database_id = "<YOUR_STAGING_DATABASE_ID>" # Replace: Create or use a separate D1 for staging
 migrations_dir = "src/cloudflare/d1/migrations"
 
 [[env.staging.kv_namespaces]]
 binding = "CONFIG_KV"
-id = "<YOUR_STAGING_CONFIG_KV_ID>" # Replace
+id = "<YOUR_STAGING_CONFIG_KV_ID>" # Replace: Create or use a separate KV for staging
 
 [[env.staging.kv_namespaces]]
 binding = "REPORT_CACHE_KV"
 id = "<YOUR_STAGING_REPORT_CACHE_KV_ID>" # Replace
 
 [[env.staging.kv_namespaces]]
-binding = "SESSION_STORE" # Using SESSION_STORE, see note above.
-# binding = "SESSION" # If the adapter strictly requires "SESSION"
+binding = "SESSION" # Changed from SESSION_STORE
 id = "<YOUR_STAGING_SESSION_KV_ID>" # Replace
 
 [[env.staging.r2_buckets]]
 binding = "DOCUMENTS_BUCKET"
-bucket_name = "properaccount-documents-staging"
+bucket_name = "properaccount-documents-staging" # Ensure this R2 bucket exists
 
 [[env.staging.queues.producers]]
 queue = "background-tasks-staging"
 binding = "BACKGROUND_TASKS_QUEUE"
 
 # -----------------------------------------------------------------------------
-# Default Bindings (Used by `wrangler dev` / `wrangler pages dev --local`)
+# Default Bindings (Used by `wrangler pages dev --local`)
 # -----------------------------------------------------------------------------
 [[d1_databases]]
 binding = "DATABASE"
-database_name = "properaccount-db-dev"
-database_id = "<YOUR_DEV_OR_PREVIEW_DATABASE_ID>" # Replace
-migrations_dir = "src/cloudflare/d1/migrations" # Path to D1 migration files.
+database_name = "properaccount-db-dev" # For local Miniflare simulation
+# For local dev, you can use the production ID to develop against cloud data (use with caution),
+# or create a dedicated dev D1 instance and use its ID here.
+# If no real ID, Miniflare simulates it.
+database_id = "bc1c31a7-957e-4086-aa55-54384fe0c80a" # Using provided ID as an example; adjust as needed for dev
+migrations_dir = "src/cloudflare/d1/migrations"
 
 [[kv_namespaces]]
 binding = "CONFIG_KV"
-id = "<YOUR_DEV_OR_PREVIEW_CONFIG_KV_ID>" # Replace
+# For local dev, you can use the production ID or a dedicated dev KV.
+# Miniflare simulates if no real ID for most KV operations.
+id = "d34d0bbafca1424d8c678aade9a60dce" # Using provided ID as an example; adjust for dev
 
 [[kv_namespaces]]
 binding = "REPORT_CACHE_KV"
-id = "<YOUR_DEV_OR_PREVIEW_REPORT_CACHE_KV_ID>" # Replace
+id = "local-report-cache-kv-placeholder" # Miniflare will simulate this locally
 
 [[kv_namespaces]]
-binding = "SESSION_STORE" # Using SESSION_STORE, see note above.
-# binding = "SESSION" # If the adapter strictly requires "SESSION"
-# For local dev, Miniflare will simulate this. You don't need a real ID for local simulation.
-# However, providing a placeholder helps keep the structure.
-id = "local-session-kv-placeholder" # Placeholder for local dev simulation
+binding = "SESSION" # Changed from SESSION_STORE
+id = "local-session-kv-placeholder" # Miniflare will simulate this locally
 
 [[r2_buckets]]
 binding = "DOCUMENTS_BUCKET"
-bucket_name = "properaccount-documents-dev"
+bucket_name = "properaccount-documents-dev" # Miniflare will simulate this locally
 
 [[queues.producers]]
 queue = "background-tasks-dev"
-binding = "BACKGROUND_TASKS_QUEUE"
+binding = "BACKGROUND_TASKS_QUEUE" # Miniflare will simulate this locally
 
 # -----------------------------------------------------------------------------
 # Secrets (Set via `wrangler secret put <KEY_NAME>`)
 # -----------------------------------------------------------------------------
+# Example: wrangler secret put JWT_SECRET
 # - JWT_SECRET
 # - CSRF_SECRET
 # - GOOGLE_CLIENT_ID
@@ -134,5 +128,3 @@ binding = "BACKGROUND_TASKS_QUEUE"
 ip = "127.0.0.1"
 port = 8788
 local_protocol = "http"
-
-# Removed top-level [migrations] table as migrations_dir is specified per database.

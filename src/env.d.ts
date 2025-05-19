@@ -3,63 +3,44 @@
 /// <reference types="@astrojs/cloudflare" />
 /// <reference types="@cloudflare/workers-types" />
 
-// Define the shape of your D1, KV, R2, Queue, and DO bindings
-// This helps TypeScript understand what's available on `env` in Cloudflare Workers/Pages Functions
 interface CloudflareEnv {
-  DATABASE: D1Database; // Main D1 database binding [cite: 13]
-  CONFIG_KV: KVNamespace; // KV for application configuration [cite: 27]
-  REPORT_CACHE_KV: KVNamespace; // KV for caching reports [cite: 30]
-  DOCUMENTS_BUCKET: R2Bucket; // R2 for document storage [cite: 33]
-  BACKGROUND_TASKS_QUEUE: Queue; // Queue for background processing [cite: 311]
-  // Add other bindings like Durable Objects or AI if you use them
-  // MY_DO: DurableObjectNamespace;
-  // AI: any;
+  DATABASE: D1Database;
+  CONFIG_KV: KVNamespace;
+  REPORT_CACHE_KV: KVNamespace;
+  SESSION: KVNamespace; // Assuming you named the binding 'SESSION' for the KV session store
+  DOCUMENTS_BUCKET: R2Bucket;
+  BACKGROUND_TASKS_QUEUE: Queue;
 
-  // Secrets (defined in wrangler.toml and set via `wrangler secret put`)
-  JWT_SECRET: string; // [cite: 51]
-  CSRF_SECRET: string; // [cite: 113]
-  GOOGLE_CLIENT_ID: string; // [cite: 47]
-  GOOGLE_CLIENT_SECRET: string; // [cite: 47]
+  // Secrets (should match what you set with `wrangler secret put`)
+  JWT_SECRET: string;
+  SESSION_SECRET: string; // <--- ADD THIS LINE if not already present
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  // CSRF_SECRET?: string; // Add if you implement and set this
 }
 
-// Augment Astro's ` riconoscimento` type for Cloudflare Pages
 declare namespace App {
   interface Locals {
-    // User object, typically populated by authentication middleware [cite: 7]
     user?: {
       id: string;
       email: string;
       name?: string;
-      role: string; // Example: 'admin', 'user'
-      // Add any other user-specific properties you need
+      role: string;
     };
-    sessionId?: string; // Session identifier [cite: 7]
-    // You can add other request-specific data to `locals`
-    // مثلاً:
-    // currentEntityId?: string;
-    // csrfToken?: string;
-
-    // Cloudflare environment bindings, accessible in Astro components and API endpoints
-    // when using the Cloudflare adapter.
+    sessionId?: string;
+    // Make Cloudflare bindings available in Astro components and API routes
     cloudflare: {
       env: CloudflareEnv;
-      context: ExecutionContext; // Provides `waitUntil` and `passThroughOnException`
-    };
+      context: ExecutionContext;
+    }
   }
 }
 
-// Augment ImportMetaEnv for client-side env variables prefixed with PUBLIC_
-// and server-side env variables
+// For import.meta.env (client-side and build-time server-side)
 interface ImportMetaEnv {
-  readonly PUBLIC_APP_URL: string; // Example: URL of your deployed application
-  readonly PUBLIC_GOOGLE_ANALYTICS_ID?: string; // Example for client-side analytics
-
-  // Server-side only (same as in CloudflareEnv, but accessible via import.meta.env in server code)
-  // Note: For Cloudflare Workers/Pages, direct access to secrets via import.meta.env
-  // is generally discouraged; they should be accessed via the `env` object passed to the handler.
-  // However, some build-time env vars might be needed.
-  // The `CloudflareEnv` interface above is more relevant for runtime access in CF Workers.
-  readonly NODE_ENV?: "development" | "production" | "test";
+  readonly PUBLIC_APP_URL: string;
+  readonly PUBLIC_DEV_MODE?: string; // From your .env
+  // Add other PUBLIC_ prefixed variables here
 }
 
 interface ImportMeta {
