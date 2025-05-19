@@ -1,41 +1,59 @@
 # .gitignore
+# =========================================
 # Build output
+# =========================================
 dist/
-
-# Astro build cache and output
 .astro/
 .output/
 
-# Dependencies
+# Astro SSR artifacts (if any)
+# .astro/ already covers this
+
+# =========================================
+# Wrangler (Cloudflare) temp state
+# =========================================
+.mf/                    # Miniflare local state
+.wrangler/              # Wrangler config & cache
+/.wrangler/tmp/         # recommended temp directory
+
+# =========================================
+# Dependencies & package managers
+# =========================================
 node_modules/
 
+# =========================================
 # Logs
+# =========================================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# =========================================
 # Environment variables
+# =========================================
 .env
 .env.*local
 .env.development
 .env.production
 .dev.vars
 
+# =========================================
 # macOS-specific files
-.DS_Store
+# =========================================
+**/.DS_Store
 
-# Cloudflare
-.mf/ # Miniflare directory for local development state
-.wrangler/
-.cloudflare/
-
+# =========================================
 # Playwright
+# =========================================
 test-results/
 playwright-report/
 playwright/.cache/
+playwright/.auth/
 
-# Editor directories and files
+# =========================================
+# Editor & OS files
+# =========================================
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -48,25 +66,29 @@ playwright/.cache/
 *.sln
 *.sw?
 
-# Drizzle Studio
+# =========================================
+# Drizzle
+# =========================================
 drizzle.config.ts.snap
 
-# Authentication state
-playwright/.auth/
-
+# =========================================
 # Temporary files
+# =========================================
 .tmp/
 tmp/
 
-# Generated files
-# D1 local development
-.d1/
-# Vercel (if used, good to keep)
-.vercel
-# Turborepo cache (if used)
-.turbo
+# =========================================
+# Generated & local dev databases
+# =========================================
+.d1/                    # D1 local dev
+.vercel                 # Vercel output (if used)
+.turbo                  # Turborepo cache
 
-# Mojo files
+# =========================================
+# Mojo compilation artifacts
+# (adjust paths/patterns if you generate others;
+#  keep `src/mojo/wasm/` version-controlled if it holds final .wasm)
+# =========================================
 *.mojo
 *.🔥
 **/__pycache__/
@@ -75,7 +97,9 @@ tmp/
 *.pyd
 .ipynb_checkpoints
 
+# =========================================
 # Other
+# =========================================
 *.log
 *.db
 *.sqlite

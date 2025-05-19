@@ -24,7 +24,6 @@
     "@auth/core": "^0.39.1",
     "@auth/d1-adapter": "^1.9.1",
     "alpinejs": "^3.14.9",
-    "decimal.js": "^10.5.0",
     "drizzle-orm": "^0.43.1",
     "htmx.org": "^1.9.12",
     "typescript": "^5.8.3",
