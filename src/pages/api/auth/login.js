@@ -1,101 +1,88 @@
-// src/pages/api/auth/login.js - Login endpoint for user authentication
+// src/pages/api/auth/login.js
+import { loginUser } from '@lib/auth/auth'; // Using path alias
+import { loginSchema } from '@lib/validation/schemas/auth'; // Using path alias
+import { ZodError } from 'zod';
+
 export async function onRequest({ request, env, cookies }) {
+  // Only allow POST method
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Method not allowed'
+    }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   try {
-    // Only allow POST method
-    if (request.method !== 'POST') {
+    const requestData = await request.json();
+
+    // Validate with Zod (moved to loginUser function in lib/auth/auth.ts)
+    // The loginUser function will now handle Zod validation internally.
+
+    const result = await loginUser(env, requestData);
+
+    if (!result.success) {
       return new Response(JSON.stringify({
         success: false,
-        error: 'Method not allowed'
+        error: result.error || 'Invalid email or password', // Provide a generic message for auth failure
+        errors: result.errors // Pass along Zod errors if present
       }), {
-        status: 405,
+        status: 401, // Unauthorized for login failures
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Parse request body
-    const data = await request.json();
-    
-    // Validate required fields
-    if (!data.email || !data.password) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Missing required fields: email and password are required'
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    // Lookup user by email
-    const db = env.DATABASE;
-    const user = await db.prepare(
-      'SELECT id, name, email, password_hash FROM users WHERE email = ?'
-    ).bind(data.email.toLowerCase()).first();
-    
-    // User not found or password doesn't match
-    if (!user) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Invalid email or password'
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    // Verify password
-    const passwordMatches = await verifyPassword(data.password, user.password_hash);
-    
-    if (!passwordMatches) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Invalid email or password'
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    // Generate session token
-    const sessionId = crypto.randomUUID();
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
-    
-    // Store session in database
-    await db.prepare(
-      'INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'
-    ).bind(
-      sessionId,
-      user.id,
-      now.toISOString(),
-      expiresAt.toISOString()
-    ).run();
-    
     // Set session cookie
-    cookies.set('session-token', sessionId, {
-      path: '/',
-      expires: expiresAt,
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict'
-    });
-    
-    // Return success response (without sending back sensitive information)
+    if (result.sessionId) {
+      const expiresAt = new Date();
+      // Determine expiration based on rememberMe (defaulted in loginUser if not explicit)
+      // Assuming session duration is handled by createSession, which is called by loginUser.
+      // For cookie, use the session's actual expiration.
+      // We need to fetch the session to get its actual expiresAt if loginUser doesn't return it.
+      // For simplicity, let's assume loginUser's session creation implies standard duration
+      // or we get expiry from the session object if it was returned.
+      // For a robust solution, the session object returned from createSession should contain expiresAt.
+      // Let's assume a default 30-day cookie if rememberMe was true (which loginUser handles internally)
+      // The session TTL is handled in `createSession`. Cookie expiry should ideally match.
+      const sessionData = await env.SESSION_KV.get(`session:${result.sessionId}`, {type: "json"});
+      let cookieExpiresDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
+      if (sessionData && (sessionData as any).expiresAt) {
+        cookieExpiresDate = new Date((sessionData as any).expiresAt * 1000);
+      }
+
+
+      cookies.set('session-token', result.sessionId, {
+        path: '/',
+        expires: cookieExpiresDate,
+        httpOnly: true,
+        secure: request.url.startsWith('https:'), // Set secure only if on HTTPS
+        sameSite: 'Strict'
+      });
+    }
+
+    // Return success response
     return new Response(JSON.stringify({
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email
-      }
+      user: result.user
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
-    
+
   } catch (error) {
-    console.error('Login error:', error);
-    
+    console.error('Login API error:', error);
+     if (error instanceof ZodError) {
+        return new Response(JSON.stringify({
+            success: false,
+            error: 'Validation failed',
+            errors: error.errors,
+        }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
     return new Response(JSON.stringify({
       success: false,
       error: 'Internal server error'
@@ -104,18 +91,4 @@ export async function onRequest({ request, env, cookies }) {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-}
-
-// Password verification function
-async function verifyPassword(password, storedHash) {
-  // In a real implementation, this would use the same algorithm as the hashPassword function
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  
-  // Use SHA-256 for example (in production, use proper password verification)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
-  return hashHex === storedHash;
 }
