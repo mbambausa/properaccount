@@ -13,6 +13,7 @@ let formData = {
 };
 
 const isRegistered = Astro.url.searchParams.get('registered') === 'true';
+
 const from = Astro.url.searchParams.get('from');
 
 if (Astro.request.method === 'POST') {

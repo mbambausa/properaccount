@@ -30,9 +30,10 @@ id = "ed0fcd9e4e26484ca2d299f47439c33d"
 binding = "DOCUMENTS_BUCKET"
 bucket_name = "properaccount-documents-prod"
 
-[[env.production.queues.producers]]
-queue = "background-tasks-prod"
-binding = "BACKGROUND_TASKS_QUEUE"
+# Queues remain commented out as they require a Workers Paid Plan
+# [[env.production.queues.producers]]
+# queue = "background-tasks-prod"
+# binding = "BACKGROUND_TASKS_QUEUE"
 
 # Default Bindings for local development
 [[d1_databases]]
@@ -57,9 +58,10 @@ id = "local-session-kv-placeholder"
 binding = "DOCUMENTS_BUCKET"
 bucket_name = "properaccount-documents-dev"
 
-[[queues.producers]]
-queue = "background-tasks-dev"
-binding = "BACKGROUND_TASKS_QUEUE"
+# Queues remain commented out as they require a Workers Paid Plan
+# [[queues.producers]]
+# queue = "background-tasks-dev"
+# binding = "BACKGROUND_TASKS_QUEUE"
 
 [dev]
 ip = "127.0.0.1"

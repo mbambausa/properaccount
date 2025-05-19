@@ -3,8 +3,8 @@ import {
   defineConfig,
   presetIcons,
   presetTypography,
+  presetUno,
 } from 'unocss';
-import presetUno from '@unocss/preset-uno';
 
 export default defineConfig({
   presets: [

@@ -2,6 +2,9 @@
   "name": "properaccount",
   "type": "module",
   "version": "0.0.1",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -15,7 +18,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "pages:deploy:production": "npm run build && wrangler pages deploy ./dist --project-name=properaccount --branch=main",
-    "pages:dev": "wrangler pages dev ./dist --compatibility-date=2025-05-18 --kv=CONFIG_KV --d1=DATABASE --r2=DOCUMENTS_BUCKET --queue=BACKGROUND_TASKS_QUEUE"
+    "pages:dev": "wrangler pages dev ./dist --compatibility-date=2025-05-18 --kv=CONFIG_KV --d1=DATABASE --r2=DOCUMENTS_BUCKET"
   },
   "dependencies": {
     "@astrojs/alpinejs": "^0.4.8",
