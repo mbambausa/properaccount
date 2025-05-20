@@ -17,8 +17,8 @@ export interface Props {
   max?: string | number;
   step?: string | number;
   pattern?: string;
-  minlength?: string | number; // Added minlength property
-  maxlength?: string | number; // Added maxlength for completeness
+  minlength?: string | number;
+  maxlength?: string | number;
 }
 
 const {
@@ -38,14 +38,14 @@ const {
   max,
   step,
   pattern,
-  minlength, // Include in destructuring
-  maxlength, // Include in destructuring
+  minlength,
+  maxlength,
 } = Astro.props;
 ---
 
 <div class="mb-4">
   <label for={id} class="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-    {label}{required && <span class="text-red-500 ml-1">*</span>}
+    {label}{required && <span class="text-danger ml-1">*</span>}
   </label>
   
   <input
@@ -78,7 +78,7 @@ const {
   )}
   
   {error && (
-    <p id={`${id}-error`} class="mt-1 text-sm text-red-600 dark:text-red-400">
+    <p id={`${id}-error`} class="mt-1 text-sm text-danger dark:text-danger">
       {error}
     </p>
   )}

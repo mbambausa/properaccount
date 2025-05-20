@@ -1,160 +1,211 @@
 // src/utils/financial.ts
-import Decimal from 'decimal.js';
 
-// Define a project-specific configuration for Decimal.js
-// This configuration aims for GAAP compliance with high precision for intermediate calculations
-// and Banker's rounding (ROUND_HALF_EVEN).
-const PROPERACCOUNT_DECIMAL_CONFIG = {
-  precision: 20, // Sufficient precision for most financial calculations.
-  rounding: Decimal.ROUND_HALF_EVEN, // Banker's rounding, commonly used in finance.
-  toExpNeg: -7, // Default, controls exponential notation for small numbers.
-  toExpPos: 21, // Default, controls exponential notation for large numbers.
-};
+// Import the Mojo integration bridge
+import * as MojoFinancial from '../lib/mojo/common/financial';
 
 /**
- * Creates a new Decimal instance using a project-specific configuration.
- * This approach avoids modifying the global Decimal.js settings.
- *
- * @param value - The value to convert to a Decimal. Can be a number, string, or another Decimal instance.
- * @returns A new Decimal instance configured for ProperAccount.
- * @throws If the value cannot be converted to a Decimal.
+ * Represents a precise monetary value.
+ * When interacting with Mojo, this might be a string to maintain precision.
  */
-export function newDecimal(value: number | string | Decimal): Decimal {
-  const CustomDecimal = Decimal.clone(PROPERACCOUNT_DECIMAL_CONFIG);
+export type MonetaryValue = string | number;
+
+/**
+ * Adds two monetary values using the Mojo engine.
+ * @param a - The first value (string or number)
+ * @param b - The second value (string or number)
+ * @returns The sum as a string to maintain precision
+ */
+export async function addPrecise(a: MonetaryValue, b: MonetaryValue): Promise<string> {
   try {
-    return new CustomDecimal(value);
+    return await MojoFinancial.add(String(a), String(b));
   } catch (error) {
-    console.error(`Error creating Decimal from value: ${value}`, error);
-    // Depending on desired strictness, you might throw a custom error or return Decimal.NaN
-    throw new Error(`Invalid input for newDecimal: ${value}`);
+    console.error('Error in addPrecise:', error);
+    // Fallback logic in case Mojo fails
+    const valA = parseFloat(String(a));
+    const valB = parseFloat(String(b));
+    console.warn('addPrecise: Using fallback. Mojo engine failed.');
+    return (valA + valB).toString();
   }
 }
 
 /**
- * Formats a numerical amount (assumed to be in the main currency unit, e.g., dollars)
- * as a currency string (e.g., "$1,234.50").
- * Ensures the amount is rounded to 2 decimal places using Banker's rounding.
- *
- * @param amount - The amount to format. Can be a number, string, or Decimal instance.
- * @param currency - The ISO 4217 currency code (defaults to 'USD').
- * @returns A string representing the formatted currency value, or an error message if input is invalid.
+ * Subtracts one monetary value from another using the Mojo engine.
+ * @param a - The value to subtract from (string or number)
+ * @param b - The value to subtract (string or number)
+ * @returns The difference as a string
+ */
+export async function subtractPrecise(a: MonetaryValue, b: MonetaryValue): Promise<string> {
+  try {
+    return await MojoFinancial.subtract(String(a), String(b));
+  } catch (error) {
+    console.error('Error in subtractPrecise:', error);
+    const valA = parseFloat(String(a));
+    const valB = parseFloat(String(b));
+    console.warn('subtractPrecise: Using fallback. Mojo engine failed.');
+    return (valA - valB).toString();
+  }
+}
+
+/**
+ * Multiplies two monetary values using the Mojo engine.
+ * @param a - The first value (string or number)
+ * @param b - The second value (string or number)
+ * @returns The product as a string
+ */
+export async function multiplyPrecise(a: MonetaryValue, b: MonetaryValue): Promise<string> {
+  try {
+    return await MojoFinancial.multiply(String(a), String(b));
+  } catch (error) {
+    console.error('Error in multiplyPrecise:', error);
+    const valA = parseFloat(String(a));
+    const valB = parseFloat(String(b));
+    console.warn('multiplyPrecise: Using fallback. Mojo engine failed.');
+    return (valA * valB).toString();
+  }
+}
+
+/**
+ * Divides one monetary value by another using the Mojo engine.
+ * @param a - The dividend (string or number)
+ * @param b - The divisor (string or number)
+ * @param precision - Optional number of decimal places for the result
+ * @returns The quotient as a string
+ */
+export async function dividePrecise(
+  a: MonetaryValue,
+  b: MonetaryValue,
+  precision?: number,
+): Promise<string> {
+  try {
+    return await MojoFinancial.divide(String(a), String(b), precision);
+  } catch (error) {
+    console.error('Error in dividePrecise:', error);
+    const valA = parseFloat(String(a));
+    const valB = parseFloat(String(b));
+    if (valB === 0) {
+      throw new Error('Division by zero');
+    }
+    console.warn('dividePrecise: Using fallback. Mojo engine failed.');
+    const result = valA / valB;
+    return precision !== undefined ? result.toFixed(precision) : result.toString();
+  }
+}
+
+/**
+ * Compares two monetary values using the Mojo engine.
+ * @param a - The first value
+ * @param b - The second value
+ * @returns -1 if a < b, 0 if a === b, 1 if a > b
+ */
+export async function comparePrecise(a: MonetaryValue, b: MonetaryValue): Promise<number> {
+  try {
+    return await MojoFinancial.compare(String(a), String(b));
+  } catch (error) {
+    console.error('Error in comparePrecise:', error);
+    const valA = parseFloat(String(a));
+    const valB = parseFloat(String(b));
+    console.warn('comparePrecise: Using fallback. Mojo engine failed.');
+    if (valA < valB) return -1;
+    else if (valA > valB) return 1;
+    else return 0;
+  }
+}
+
+/**
+ * Rounds a monetary value to a specified number of decimal places.
+ * @param value - The value to round
+ * @param decimalPlaces - Number of decimal places (default: 2)
+ * @returns The rounded value as a string
+ */
+export async function roundPrecise(value: MonetaryValue, decimalPlaces: number = 2): Promise<string> {
+  try {
+    return await MojoFinancial.round(String(value), decimalPlaces);
+  } catch (error) {
+    console.error('Error in roundPrecise:', error);
+    console.warn('roundPrecise: Using fallback. Mojo engine failed.');
+    return parseFloat(String(value)).toFixed(decimalPlaces);
+  }
+}
+
+/**
+ * Formats a monetary value as a currency string.
+ * This function can remain in JavaScript as it's for presentation.
+ * @param value - The monetary value (string or number)
+ * @param currencyCode - The ISO currency code (e.g., 'USD', 'EUR'). Defaults to 'USD'
+ * @param locale - The locale for formatting (e.g., 'en-US'). Defaults to 'en-US'
+ * @param minimumFractionDigits - Minimum number of fraction digits. Defaults to 2
+ * @param maximumFractionDigits - Maximum number of fraction digits. Defaults to 2
+ * @returns The formatted currency string
  */
 export function formatCurrency(
-  amount: number | string | Decimal,
-  currency = 'USD'
+  value: MonetaryValue,
+  currencyCode: string = 'USD',
+  locale: string = 'en-US',
+  minimumFractionDigits: number = 2,
+  maximumFractionDigits: number = 2,
 ): string {
+  const numericValue = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(numericValue)) {
+    return `${currencyCode} NaN`;
+  }
+
   try {
-    const decimalAmount = newDecimal(amount);
-    // Ensure the amount is a valid number before formatting
-    if (decimalAmount.isNaN()) {
-      console.warn(`formatCurrency received an invalid amount: ${amount}`);
-      return 'Invalid Amount';
-    }
-    const num = decimalAmount.toDP(2).toNumber(); // Ensure 2 decimal places
-    return new Intl.NumberFormat('en-US', { // Using 'en-US' for consistent formatting, adjust if localization is needed.
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(num);
+      currency: currencyCode,
+      minimumFractionDigits,
+      maximumFractionDigits,
+    }).format(numericValue);
   } catch (error) {
-    console.error(`Error formatting currency for amount: ${amount}`, error);
-    return 'Formatting Error';
+    console.error('Error formatting currency:', error);
+    return `${currencyCode} ${numericValue.toFixed(minimumFractionDigits)}`;
   }
 }
 
 /**
- * Formats an integer amount (representing cents) as a currency string (e.g., 12345 cents -> "$123.45").
- *
- * @param cents - The amount in cents (must be an integer).
- * @param currency - The ISO 4217 currency code (defaults to 'USD').
- * @returns A string representing the formatted currency value, or an error message if input is invalid.
+ * Parses a formatted currency string into a string representation of a number.
+ * @param formattedValue - The formatted currency string
+ * @returns The numeric string, or null if parsing fails
  */
-export function formatCentsAsCurrency(
-  cents: number,
-  currency = 'USD'
-): string {
-  if (!Number.isInteger(cents)) {
-    console.warn(
-      `formatCentsAsCurrency received a non-integer value for cents: ${cents}. Potential precision issues.`
-    );
-    // Optionally, you could round `cents` here or throw an error.
-    // For now, it proceeds but the warning is important.
+export function parseCurrency(formattedValue: string): string | null {
+  if (typeof formattedValue !== 'string') {
+    return null;
   }
+  
   try {
-    const dollars = newDecimal(cents).dividedBy(100);
-    // `formatCurrency` will handle rounding to 2 decimal places.
-    return formatCurrency(dollars, currency);
+    // Remove currency symbols, group separators, and whitespace
+    const cleaned = formattedValue
+      .replace(/[$€£¥₽₹₩₺₴₦₱]/g, '') // Common currency symbols
+      .replace(/[,\s]/g, ''); // Remove thousand separators and spaces
+    
+    // Handle parentheses for negative numbers (accounting notation)
+    const value = cleaned.match(/^\((.*)\)$/) 
+      ? "-" + cleaned.replace(/[()]/g, '')
+      : cleaned;
+    
+    const numericValue = parseFloat(value);
+    return isNaN(numericValue) ? null : numericValue.toString();
   } catch (error) {
-    console.error(`Error formatting cents as currency for cents: ${cents}`, error);
-    return 'Formatting Error';
+    console.error('Error parsing currency:', error);
+    return null;
   }
 }
 
 /**
- * Represents a line item in a transaction, used for balancing checks.
- * Assumes 'amount' is always positive and in cents.
+ * Converts from cents (integer storage) to dollars (decimal representation)
+ * @param cents - The amount in cents
+ * @returns The amount in dollars as a string
  */
-interface TransactionLineCents {
-  amount: number; // Amount in cents, always positive.
-  is_debit: boolean; // True if the line is a debit, false if a credit.
+export async function centsToDecimal(cents: number): Promise<string> {
+  return await dividePrecise(cents, 100, 2);
 }
 
 /**
- * Checks if a transaction (represented by an array of lines with amounts in cents) is balanced.
- * Total debits must equal total credits.
- *
- * @param lines - An array of transaction lines, where each line has an `amount` (in cents) and `is_debit` flag.
- * @returns True if the transaction is balanced, false otherwise.
+ * Converts from dollars (decimal representation) to cents (integer storage)
+ * @param decimal - The amount in dollars
+ * @returns The amount in cents as an integer
  */
-export function isTransactionBalancedCents(
-  lines: Array<TransactionLineCents>
-): boolean {
-  if (!lines || lines.length === 0) {
-    // An empty transaction or null input might be considered unbalanced or handled as an error.
-    // For this function, an empty transaction is technically "balanced" at zero.
-    return true; 
-  }
-  let balance = newDecimal(0);
-  for (const line of lines) {
-    // Ensure line.amount is a valid number before creating Decimal
-    if (typeof line.amount !== 'number' || isNaN(line.amount)) {
-        console.warn('isTransactionBalancedCents encountered an invalid amount in lines:', line);
-        return false; // Or throw an error, depending on desired strictness
-    }
-    const amt = newDecimal(line.amount); // Amount is in cents
-    balance = line.is_debit ? balance.plus(amt) : balance.minus(amt);
-  }
-  return balance.isZero();
-}
-
-/**
- * Calculates the balance of an account (in cents) based on a series of transaction lines.
- * The calculation depends on the account's normal balance (debit or credit).
- *
- * @param lines - An array of transaction lines affecting the account.
- * @param accountNormalBalance - The normal balance type of the account ('debit' or 'credit').
- * @returns The calculated account balance in cents.
- */
-export function calculateAccountBalanceCents(
-  lines: Array<TransactionLineCents>,
-  accountNormalBalance: 'debit' | 'credit'
-): number {
-  let balance = newDecimal(0);
-  for (const line of lines) {
-    if (typeof line.amount !== 'number' || isNaN(line.amount)) {
-        console.warn('calculateAccountBalanceCents encountered an invalid amount in lines:', line);
-        // Skip this line or throw an error
-        continue; 
-    }
-    const amt = newDecimal(line.amount); // Amount is in cents
-    if (accountNormalBalance === 'debit') {
-      balance = line.is_debit ? balance.plus(amt) : balance.minus(amt);
-    } else { // accountNormalBalance === 'credit'
-      balance = !line.is_debit ? balance.plus(amt) : balance.minus(amt);
-    }
-  }
-  // The balance is in cents, return as a number.
-  // If the balance could exceed Number.MAX_SAFE_INTEGER, consider returning string or Decimal.
-  return balance.toNumber(); 
+export async function decimalToCents(decimal: MonetaryValue): Promise<number> {
+  const result = await multiplyPrecise(decimal, 100);
+  return Math.round(parseFloat(result));
 }

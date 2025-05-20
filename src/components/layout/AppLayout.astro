@@ -4,6 +4,7 @@
 // Import components and dependencies
 import '@/styles/global.css';
 import ThemeScript from '@/components/theme/ThemeScript.astro';
+import ThemeToggle from '@/components/theme/ThemeToggle.astro';
 import DebugTools from '@/components/dev/DebugTools.astro';
 import ViewTransitions from '@/components/layout/ViewTransitions.astro';
 import ToastContainer from '@/components/ui/ToastContainer.astro';
@@ -15,22 +16,33 @@ export interface Props {
   title: string;
   description?: string;
   user?: User;
-  fullWidth?: boolean; // For content that should span the full width of the main area
+  contentWidth?: 'narrow' | 'standard' | 'wide' | 'full';
+  headerBorder?: boolean;
+  showPageHeader?: boolean;
 }
 
 const {
   title,
   description = 'ProperAccount - Real Estate Accounting Application',
   user,
-  fullWidth = false,
+  contentWidth = 'standard',
+  headerBorder = true,
+  showPageHeader = true,
 } = Astro.props;
 
 // Get current path for sidebar highlighting
 const currentPath = Astro.url.pathname;
 
 // For dynamic padding based on sidebar state (if sidebar can collapse)
-// This could be managed by a class on the body or main content controlled by Sidebar's Alpine state via events
 const sidebarWidthClass = 'lg:pl-[var(--sidebar-width)]'; // Uses CSS variable
+
+// Content width classes map
+const contentWidthClasses = {
+  narrow: 'max-w-4xl',
+  standard: 'max-w-7xl',
+  wide: 'max-w-screen-2xl',
+  full: 'w-full'
+};
 ---
 
 <!DOCTYPE html>
@@ -56,64 +68,40 @@ const sidebarWidthClass = 'lg:pl-[var(--sidebar-width)]'; // Uses CSS variable
 
       {/* Main content area - ID for potential JS targeting if sidebar collapses */}
       <div id="main-content-area" class={`flex-1 flex flex-col ${sidebarWidthClass}`}>
-        <header class="sticky top-0 z-10 w-full h-[var(--header-height)] flex items-center justify-between px-4 lg:px-8 bg-white/75 dark:bg-neutral-800/75 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-700 shadow-sm">
-          <h1 class="text-xl font-semibold text-neutral-900 dark:text-white truncate">
-            {title}
-          </h1>
+        {showPageHeader && (
+          <header class:list={[
+            "sticky top-0 z-10 w-full h-[var(--header-height)] flex items-center justify-between px-4 lg:px-8 bg-white/75 dark:bg-neutral-800/75 backdrop-blur-md",
+            headerBorder ? "border-b border-neutral-200 dark:border-neutral-700" : "",
+            "shadow-sm"
+          ]}>
+            <h1 class="text-xl font-semibold text-neutral-900 dark:text-white truncate">
+              {title}
+            </h1>
 
-          <div class="flex items-center space-x-4">
-            <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700" aria-label="Search">
-              <div class="i-carbon-search h-5 w-5"></div>
-              <span class="sr-only">Search</span>
-            </button>
-            
-            <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700" aria-label="Notifications">
-              <div class="i-carbon-notification h-5 w-5"></div>
-              <span class="sr-only">Notifications</span>
-            </button>
-            
-            <button 
-              id="theme-toggle" 
-              type="button"
-              class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700"
-              x-data="{ 
-                isDark: false,
-                init() {
-                  this.isDark = localStorage.getItem('color-theme') === 'dark' || 
-                                (!('color-theme' in localStorage) && 
-                                 window.matchMedia('(prefers-color-scheme: dark)').matches);
-                },
-                toggle() {
-                  // Use the global toggleTheme function from ThemeScript.astro
-                  if (typeof window.toggleTheme === 'function') {
-                    window.toggleTheme();
-                    this.isDark = !this.isDark;
-                  }
-                }
-              }"
-              @click="toggle()"
-              aria-label="Toggle theme"
-            >
-              <div x-show="isDark" class="i-carbon-sun h-5 w-5" style="display: none;"></div>
-              <div x-show="!isDark" class="i-carbon-moon h-5 w-5"></div>
-              <span class="sr-only" x-text="isDark ? 'Switch to light mode' : 'Switch to dark mode'"></span>
-            </button>
-          </div>
-        </header>
+            <div class="flex items-center space-x-4">
+              <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150" aria-label="Search">
+                <div class="i-carbon-search h-5 w-5"></div>
+                <span class="sr-only">Search</span>
+              </button>
+              
+              <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150" aria-label="Notifications">
+                <div class="i-carbon-notification h-5 w-5"></div>
+                <span class="sr-only">Notifications</span>
+              </button>
+              
+              <ThemeToggle />
+            </div>
+          </header>
+        )}
 
         <main id="main-content" class="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div class:list={[
-            fullWidth ? 'w-full' : 'max-w-7xl mx-auto',
-          ]}>
+          <div class={`${contentWidthClasses[contentWidth]} mx-auto`}>
             <slot />
           </div>
         </main>
         
         <footer class="bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 py-4 px-4 lg:px-8 text-sm">
-          <div class:list={[
-            'flex flex-col sm:flex-row justify-between items-center gap-2',
-            fullWidth ? 'w-full' : 'max-w-7xl mx-auto'
-          ]}>
+          <div class={`${contentWidthClasses[contentWidth]} mx-auto flex flex-col sm:flex-row justify-between items-center gap-2`}>
             <div class="text-neutral-500 dark:text-neutral-400">
               &copy; {new Date().getFullYear()} ProperAccount. All rights reserved.
             </div>

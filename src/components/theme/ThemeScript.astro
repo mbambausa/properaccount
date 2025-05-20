@@ -17,6 +17,20 @@
   })();
 </script>
 
+<style is:global>
+  /* Add transition for theme changes */
+  html {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  html.dark *,
+  html:not(.dark) * {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 0.3s;
+  }
+</style>
+
 <script is:inline>
   window.toggleTheme = function() {
     // Toggle the 'dark' class on the <html> element

@@ -55,22 +55,22 @@ const { fallback = "Something went wrong. Please try again later." } = Astro.pro
       // Clear current content
       this.innerHTML = '';
       
-      // Create error message element
+      // Create error message element using HSL variables for colors
       const errorDiv = document.createElement('div');
-      errorDiv.className = 'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 my-4 rounded-md';
+      errorDiv.className = 'bg-danger/10 dark:bg-danger/20 border-l-4 border-danger p-4 my-4 rounded-md';
       errorDiv.setAttribute('role', 'alert');
       
       errorDiv.innerHTML = `
         <div class="flex">
           <div class="flex-shrink-0">
-            <div class="i-carbon-warning-alt h-5 w-5 text-red-500"></div>
+            <div class="i-carbon-warning-alt h-5 w-5 text-danger"></div>
           </div>
           <div class="ml-3">
-            <p class="text-sm text-red-700 dark:text-red-200">${fallback}</p>
-            <p class="text-xs text-red-600 dark:text-red-300 mt-1">${message}</p>
+            <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100">${fallback}</p>
+            <p class="text-xs text-danger dark:text-danger mt-1">${message}</p>
           </div>
         </div>
-        <button class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline">Retry</button>
+        <button class="mt-2 text-sm text-danger hover:text-danger/80 dark:text-danger dark:hover:text-danger/80 hover:underline transition-colors duration-150">Retry</button>
       `;
       
       // Add retry button handler

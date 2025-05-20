@@ -1,4 +1,4 @@
-// src/lib/mojo/common/financial.ts
+// src/lib/mojo/common/big-decimal.mojo
 
 /**
  * JavaScript Adapter for Mojo BigDecimal Financial Operations.

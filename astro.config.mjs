@@ -7,7 +7,7 @@ import UnoCSS from "unocss/astro";
 // https://astro.build/config
 export default defineConfig({
   // Render output as server-side, which is necessary for dynamic features
-  // and integrations like Auth.js[cite: 625, 1557].
+  // and integrations like Auth.js
   output: "server",
   adapter: cloudflare({
     mode: "directory", // Standard mode for Cloudflare Pages deployments.
@@ -17,7 +17,7 @@ export default defineConfig({
       persistToStorage: true, // Good for local simulation of KV, D1, R2.
     },
     // The project plan indicates use of a custom KV-based session
-    // management via `src/lib/auth/session.ts`[cite: 7, 1487, 1533], rather than this adapter's built-in sessions.
+    // management via `src/lib/auth/session.ts`, rather than this adapter's built-in sessions.
     // Thus, keeping this commented out is correct.
     // Ensure your `SESSION_KV` binding is correctly configured in `wrangler.toml` and development scripts.
     // sessions: {
@@ -28,11 +28,10 @@ export default defineConfig({
   }),
   integrations: [
     // If using Astro's View Transitions, a custom entrypoint for Alpine.js
-    // helps maintain state, as documented in "Alpinejs and UnoCSS.pdf" (Page 2)[cite: 569].
-    // Your `src/scripts/alpine-setup.js` file is suitable for this.
-    alpinejs({ entrypoint: '/src/scripts/alpine-setup.js' }),
+    // helps maintain state, as documented in "Alpinejs and UnoCSS.pdf" (Page 2).
+    alpinejs({ entrypoint: '/src/scripts/alpine-setup.js' }), // Assuming alpine-setup.js will be created
     UnoCSS({
-      injectReset: true, // Applies a CSS reset for consistent styling[cite: 584].
+      injectReset: true, // Applies a CSS reset for consistent styling.
     }),
   ],
   vite: {

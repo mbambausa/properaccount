@@ -5,8 +5,9 @@ export interface Props {
   subtitle?: string;
   noPadding?: boolean;
   variant?: 'default' | 'outline' | 'filled';
+  shadow?: 'none' | 'sm' | 'md' | 'lg';
   class?: string;
-  headerClass?: string; // Renamed for clarity
+  headerClass?: string;
   bodyClass?: string;
   footerClass?: string;
   'data-testid'?: string;
@@ -17,25 +18,32 @@ const {
   subtitle,
   noPadding = false,
   variant = 'default',
-  class: userClassName = '', // Renamed for clarity
+  shadow = 'sm',
+  class: userClassName = '',
   headerClass = '',
   bodyClass = '',
   footerClass = '',
   'data-testid': dataTestId,
 } = Astro.props;
 
+// Use HSL variables for colors through components
 // Variant base classes
-// 'default' expects a 'card' shortcut from uno.config.ts or global.css
-// For 'outline' and 'filled', specific utility classes are applied here.
 const variantBaseClasses = {
-  default: 'card', // Expects: 'bg-white dark:bg-neutral-800 rounded-lg shadow-sm'
+  default: 'bg-white dark:bg-neutral-800 rounded-lg', 
   outline: 'border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800',
-  filled: 'bg-neutral-100 dark:bg-neutral-700/50 rounded-lg', // Adjusted dark bg for filled
+  filled: 'bg-neutral-100 dark:bg-neutral-700/50 rounded-lg',
+};
+
+// Shadow classes
+const shadowClasses = {
+  none: '',
+  sm: 'shadow-sm',
+  md: 'shadow-md',
+  lg: 'shadow-lg'
 };
 
 // Classes for the header section
-// Expects 'card-header' shortcut from uno.config.ts or global.css
-const headerBaseClasses = 'card-header px-4 py-3 border-b border-neutral-200 dark:border-neutral-700';
+const headerBaseClasses = 'px-4 py-3 border-b border-neutral-200 dark:border-neutral-700';
 
 // Determine if we have header or footer slots
 const hasHeaderSlot = Astro.slots.has('header');
@@ -43,29 +51,37 @@ const hasFooterSlot = Astro.slots.has('footer');
 const hasTitleOrSubtitle = title || subtitle;
 ---
 
-<div class={`${variantBaseClasses[variant]} overflow-hidden ${userClassName}`} data-testid={dataTestId}>
+<div 
+  class:list={[
+    variantBaseClasses[variant],
+    shadowClasses[shadow],
+    'overflow-hidden transition-shadow duration-200',
+    userClassName
+  ]} 
+  data-testid={dataTestId}
+>
   {/* Card Header - Render if slot, title, or subtitle is present */}
   {(hasHeaderSlot || hasTitleOrSubtitle) && (
-    <div class={`${headerBaseClasses} ${headerClass}`}>
+    <div class:list={[headerBaseClasses, headerClass]}>
       {hasHeaderSlot ? (
         <slot name="header" />
       ) : (
         <>
           {title && <h3 class="text-lg font-semibold leading-6 text-neutral-900 dark:text-white">{title}</h3>}
-          {subtitle && <p class={`mt-1 text-sm text-neutral-500 dark:text-neutral-400 ${title ? 'mt-1' : ''}`}>{subtitle}</p>}
+          {subtitle && <p class:list={["text-sm text-neutral-500 dark:text-neutral-400", title ? "mt-1" : ""]}>{subtitle}</p>}
         </>
       )}
     </div>
   )}
 
   {/* Card Body */}
-  <div class={`${noPadding ? '' : 'p-4'} ${bodyClass}`}>
+  <div class:list={[noPadding ? "" : "p-4", bodyClass]}>
     <slot />
   </div>
 
   {/* Card Footer */}
   {hasFooterSlot && (
-    <div class={`border-t border-neutral-200 dark:border-neutral-700 px-4 py-3 ${footerClass}`}>
+    <div class:list={["border-t border-neutral-200 dark:border-neutral-700 px-4 py-3", footerClass]}>
       <slot name="footer" />
     </div>
   )}

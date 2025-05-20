@@ -1,0 +1,55 @@
+---
+// src/components/theme/ThemeToggle.astro
+// A standardized theme toggle component that can be used across layouts
+export interface Props {
+  size?: 'sm' | 'md' | 'lg';
+  class?: string;
+}
+
+const { 
+  size = 'md', 
+  class: customClass = '' 
+} = Astro.props;
+
+// Size classes
+const sizeClasses = {
+  sm: 'p-1',
+  md: 'p-1.5',
+  lg: 'p-2'
+};
+
+const iconSizeClasses = {
+  sm: 'h-4 w-4',
+  md: 'h-5 w-5',
+  lg: 'h-6 w-6'
+};
+---
+
+<button 
+  id="theme-toggle" 
+  type="button"
+  class:list={[
+    `${sizeClasses[size]} text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150`,
+    customClass
+  ]}
+  x-data="{ 
+    isDark: false,
+    init() {
+      this.isDark = localStorage.getItem('color-theme') === 'dark' || 
+                    (!('color-theme' in localStorage) && 
+                    window.matchMedia('(prefers-color-scheme: dark)').matches);
+    },
+    toggle() {
+      if (typeof window.toggleTheme === 'function') {
+        window.toggleTheme();
+        this.isDark = !this.isDark;
+      }
+    }
+  }"
+  @click="toggle()"
+  aria-label="Toggle theme"
+>
+  <div x-show="isDark" class={`i-carbon-sun ${iconSizeClasses[size]}`} style="display: none;"></div>
+  <div x-show="!isDark" class={`i-carbon-moon ${iconSizeClasses[size]}`}></div>
+  <span class="sr-only" x-text="isDark ? 'Switch to light mode' : 'Switch to dark mode'"></span>
+</button>

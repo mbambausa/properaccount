@@ -24,7 +24,7 @@ export interface ChartOfAccount {
   user_id: string;
   /** User-defined code for the account (e.g., "1010", "6050"). Unique per user. */
   code: string;
-  /** Human-readable name for the account (e.g., “Operating Cash Account”, “Office Supplies”). */
+  /** Human-readable name for the account (e.g., "Operating Cash Account", "Office Supplies"). */
   name: string;
   /** The fundamental type of the account. */
   type: AccountSystemType;
@@ -76,6 +76,3 @@ export interface ChartOfAccountInput {
   tax_category?: string | null;
   parent_id?: string | null;
 }
-
-// The other type files (entity.ts, transaction.ts, loan.ts) from updated_type_definitions_v1
-// were also confirmed to be largely okay, with minor adjustments like removing updated_at from TransactionLine.

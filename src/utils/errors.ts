@@ -1,91 +1,161 @@
 // src/utils/errors.ts
 
 /**
- * Defines a set of standardized error codes for the application.
- * This helps in categorizing errors and handling them consistently.
- */
-export enum ErrorCode {
-  /** Indicates an error originating from database operations. */
-  DATABASE_ERROR = 'database_error',
-  /** Indicates that input data failed validation checks. */
-  VALIDATION_ERROR = 'validation_error',
-  /** Indicates an error during user authentication (e.g., invalid credentials). */
-  AUTHENTICATION_ERROR = 'authentication_error',
-  /** Indicates that an authenticated user does not have permission to perform an action. */
-  AUTHORIZATION_ERROR = 'authorization_error',
-  /** Indicates that a requested resource was not found. */
-  NOT_FOUND = 'not_found',
-  /** Indicates that the client sent an invalid request (e.g., malformed data). */
-  BAD_REQUEST = 'bad_request',
-  /** Indicates a generic or unexpected server-side error. */
-  SERVER_ERROR = 'server_error',
-  /** Indicates an error related to third-party API integrations. */
-  EXTERNAL_API_ERROR = 'external_api_error',
-  /** Indicates a configuration issue within the application. */
-  CONFIGURATION_ERROR = 'configuration_error',
-  /** Indicates that an operation timed out. */
-  TIMEOUT_ERROR = 'timeout_error',
-  /** Indicates a conflict, e.g., trying to create a resource that already exists. */
-  CONFLICT_ERROR = 'conflict_error',
-}
-
-/**
- * Custom error class for application-specific errors.
- * Extends the built-in Error class to include an error code, HTTP status, and optional details.
+ * Base class for custom application errors.
  */
 export class AppError extends Error {
-  /** A specific error code from the ErrorCode enum. */
-  public readonly code: ErrorCode;
-  /** The HTTP status code appropriate for this error. */
-  public readonly status: number;
-  /** Optional additional details or context about the error (e.g., validation failures). */
-  public readonly details?: any;
+  public readonly statusCode: number;
+  public readonly isOperational: boolean; // Distinguishes operational errors from programmer errors
+  public readonly code?: string;
 
-  /**
-   * Creates an instance of AppError.
-   * @param code - The error code from the ErrorCode enum.
-   * @param message - A human-readable description of the error.
-   * @param status - The HTTP status code (defaults to 500 if not specified).
-   * @param details - Optional additional information about the error.
-   */
-  constructor(code: ErrorCode, message: string, status: number = 500, details?: any) {
-    super(message); // Call the parent Error constructor
+  constructor(
+    message: string,
+    statusCode: number = 500,
+    isOperational: boolean = true,
+    name?: string,
+    code?: string,
+  ) {
+    super(message);
+    this.name = name || this.constructor.name;
+    this.statusCode = statusCode;
+    this.isOperational = isOperational;
     this.code = code;
-    this.status = status;
-    this.details = details;
-    this.name = 'AppError'; // Set the error name for easier identification
 
-    // This line is important for ensuring `instanceof AppError` works correctly
-    // when targeting older JavaScript environments, though less critical with modern TS/JS.
-    Object.setPrototypeOf(this, AppError.prototype);
+    // Maintains proper stack trace for where our error was thrown (only available on V8)
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
   }
 }
 
 /**
- * A utility function to handle unknown errors and ensure they are returned as AppError instances.
- * If the caught error is already an AppError, it's returned as is.
- * Otherwise, it's logged and wrapped in a generic SERVER_ERROR AppError.
- *
- * @param error - The error object caught in a try-catch block (typed as unknown for safety).
- * @returns An instance of AppError.
+ * Type for structured validation errors with field-specific error messages.
  */
-export function handleError(error: unknown): AppError {
-  if (error instanceof AppError) {
-    // If the error is already an AppError, return it directly.
-    return error;
+export type ValidationErrorDetail = Record<string, string[]>;
+
+/**
+ * Error for invalid input or data validation failures.
+ */
+export class ValidationError extends AppError {
+  public readonly errors?: ValidationErrorDetail;
+
+  constructor(message: string = 'Invalid input provided.', errors?: ValidationErrorDetail) {
+    super(message, 400, true, 'ValidationError', 'VALIDATION_ERROR');
+    this.errors = errors;
+  }
+}
+
+/**
+ * Error for authentication failures.
+ */
+export class AuthError extends AppError {
+  constructor(message: string = 'Authentication failed.', code: string = 'AUTH_FAILED') {
+    super(message, 401, true, 'AuthError', code);
+  }
+}
+
+/**
+ * Error for authorization failures (user is authenticated but lacks permission).
+ */
+export class ForbiddenError extends AppError {
+  constructor(message: string = 'You do not have permission to perform this action.', code: string = 'FORBIDDEN') {
+    super(message, 403, true, 'ForbiddenError', code);
+  }
+}
+
+/**
+ * Error for when a requested resource is not found.
+ */
+export class NotFoundError extends AppError {
+  constructor(message: string = 'The requested resource was not found.', code: string = 'NOT_FOUND') {
+    super(message, 404, true, 'NotFoundError', code);
+  }
+}
+
+/**
+ * Error for conflicts, e.g., trying to create a resource that already exists.
+ */
+export class ConflictError extends AppError {
+  constructor(message: string = 'A conflict occurred with the current state of the resource.', code: string = 'CONFLICT') {
+    super(message, 409, true, 'ConflictError', code);
+  }
+}
+
+/**
+ * Error for issues with external service integrations.
+ */
+export class ServiceIntegrationError extends AppError {
+  constructor(message: string = 'An error occurred while communicating with an external service.', code: string = 'SERVICE_ERROR') {
+    super(message, 502, true, 'ServiceIntegrationError', code);
+  }
+}
+
+/**
+ * Interface defining the structure of API error responses.
+ */
+export interface ApiErrorResponse {
+  error: {
+    message: string;
+    statusCode: number;
+    code?: string;
+    details?: unknown;
+  };
+}
+
+/**
+ * Generic API error utility to create a standardized JSON error response.
+ */
+export function createApiErrorResponse(
+  message: string,
+  statusCode: number,
+  details?: unknown,
+  code?: string,
+): Response {
+  const errorResponse: ApiErrorResponse = {
+    error: {
+      message,
+      statusCode,
+      ...(code ? { code } : {}),
+      ...(details ? { details } : {}),
+    },
+  };
+
+  return new Response(
+    JSON.stringify(errorResponse),
+    {
+      status: statusCode,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+/**
+ * Type guard to check if an error is an instance of AppError.
+ */
+export function isAppError(error: unknown): error is AppError {
+  return error instanceof AppError;
+}
+
+/**
+ * Creates a standardized error response from an Error object.
+ * Useful for centralized error handling in API routes.
+ */
+export function errorToResponse(error: unknown): Response {
+  if (isAppError(error)) {
+    return createApiErrorResponse(
+      error.message,
+      error.statusCode,
+      error instanceof ValidationError ? { validationErrors: error.errors } : undefined,
+      error.code
+    );
   }
   
-  // Log the original unhandled error for debugging purposes.
-  // In a production environment, you might send this to an error tracking service.
-  console.error('Unhandled error occurred:', error);
-
-  // For any other type of error, wrap it in a generic AppError.
-  return new AppError(
-    ErrorCode.SERVER_ERROR,
-    'An unexpected error occurred on the server. Please try again later.', // User-friendly message
-    500, // Default to 500 Internal Server Error
-    // Optionally, include some non-sensitive details from the original error if helpful for debugging,
-    // but be cautious about exposing sensitive information.
-    (error instanceof Error) ? { originalError: error.message } : { originalError: String(error) }
+  // For unexpected errors, return a generic 500 response
+  console.error('Unexpected error:', error);
+  return createApiErrorResponse(
+    'An unexpected error occurred.',
+    500,
+    undefined,
+    'INTERNAL_ERROR'
   );
 }

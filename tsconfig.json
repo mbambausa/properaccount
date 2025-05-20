@@ -1,16 +1,15 @@
 // tsconfig.json
 {
-  "extends": "astro/tsconfigs/strict", // Base configuration with strict type-checking.
+  "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
-    "target": "ES2022", // Modern ECMAScript target, suitable for Cloudflare Workers.
-    "lib": ["ES2022", "DOM", "DOM.Iterable"], // Standard libraries.
-    "module": "ESNext", // Uses the latest module system.
-    "moduleResolution": "bundler", // Recommended for modern bundlers like Vite (used by Astro).
-    "resolveJsonModule": true, // Allows importing JSON files.
-    "isolatedModules": true, // Ensures files can be transpiled independently.
-    "esModuleInterop": true, // Enables compatibility with CommonJS modules.
-    "noEmit": true, // Correct for Astro; TypeScript is used for type-checking only.
-    // Strictness flags are generally good for code quality.
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "noEmit": true,
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -18,21 +17,19 @@
     "strictBindCallApply": true,
     "strictPropertyInitialization": true,
     "noImplicitThis": true,
-    "useUnknownInCatchVariables": true, // Good practice for safer catch blocks.
+    "useUnknownInCatchVariables": true,
     "alwaysStrict": true,
-    // Consider setting these to `true` for stricter code hygiene.
-    // If `false` is a deliberate choice for development workflow, it's acceptable.
-    "noUnusedLocals": false,      // Consider `true`
-    "noUnusedParameters": false,  // Consider `true`
-    "noImplicitReturns": true, // Ensures functions with a return type always return a value.
-    "noFallthroughCasesInSwitch": true, // Prevents accidental fall-through in switch statements.
-    "forceConsistentCasingInFileNames": true, // Important for cross-platform consistency.
-    "skipLibCheck": true, // Speeds up type checking by skipping .d.ts files.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
     "types": [
-      "@cloudflare/workers-types" // Essential for Cloudflare Workers development.
+      "@cloudflare/workers-types"
     ],
-    "baseUrl": ".", // Standard for resolving path aliases.
-    "paths": { // Path aliases for cleaner imports.
+    "baseUrl": ".",
+    "paths": {
       "@/*": ["src/*"],
       "@components/*": ["src/components/*"],
       "@layouts/*": ["src/components/layout/*"],
@@ -40,13 +37,18 @@
       "@assets/*": ["src/assets/*"],
       "@styles/*": ["src/styles/*"],
       "@types/*": ["src/types/*"],
-      "@content/*": ["src/content/*"], // For Astro Content Collections
-      "@server/*": ["src/server/*"]    // Verify if `src/server/` is a planned directory. If not, this alias can be removed.
+      "@content/*": ["src/content/*"],
+      "@server/*": ["src/server/*"],
+      "@db/*": ["cloudflare/d1/*"]
     },
-    "jsx": "preserve", // Correct for Astro.
-    "jsxImportSource": "astro" // Correct for Astro.
+    "jsx": "preserve",
+    "jsxImportSource": "astro",
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src"
+    ]
   },
-  "include": [ // Specifies which files TypeScript should check.
+  "include": [
     "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.astro",
@@ -54,5 +56,5 @@
     "*.config.ts",
     "*.config.mjs"
   ],
-  "exclude": ["node_modules", "dist", ".wrangler", ".mf", ".DS_Store"] // Standard exclusions.
+  "exclude": ["node_modules", "dist", ".wrangler", ".mf", ".DS_Store"]
 }
