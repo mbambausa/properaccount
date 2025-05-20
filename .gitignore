@@ -1,59 +1,27 @@
 # .gitignore
-# =========================================
-# Build output
-# =========================================
-dist/
-.astro/
-.output/
-
-# Astro SSR artifacts (if any)
-# .astro/ already covers this
 
 # =========================================
-# Wrangler (Cloudflare) temp state
-# =========================================
-.mf/                    # Miniflare local state
-.wrangler/              # Wrangler config & cache
-/.wrangler/tmp/         # recommended temp directory
-
-# =========================================
-# Dependencies & package managers
-# =========================================
-node_modules/
-
+# General
 # =========================================
 # Logs
-# =========================================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.log
 
-# =========================================
-# Environment variables
-# =========================================
+# Environment variables - CRITICAL to ignore
 .env
-.env.*local
-.env.development
-.env.production
+.env.*
+!.env.example # Keep example env files version controlled
 .dev.vars
 
-# =========================================
-# macOS-specific files
-# =========================================
-**/.DS_Store
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# =========================================
-# Playwright
-# =========================================
-test-results/
-playwright-report/
-playwright/.cache/
-playwright/.auth/
-
-# =========================================
-# Editor & OS files
-# =========================================
+# Editor-specific files
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -66,41 +34,85 @@ playwright/.auth/
 *.sln
 *.sw?
 
-# =========================================
-# Drizzle
-# =========================================
-drizzle.config.ts.snap
+# Dependency directories
+node_modules/
 
-# =========================================
 # Temporary files
-# =========================================
 .tmp/
 tmp/
 
 # =========================================
-# Generated & local dev databases
+# Build output & Caches
 # =========================================
-.d1/                    # D1 local dev
-.vercel                 # Vercel output (if used)
-.turbo                  # Turborepo cache
+dist/
+.astro/ # Astro's build cache and intermediate files
+.output/ # Common output directory for some tools
 
 # =========================================
-# Mojo compilation artifacts
-# (adjust paths/patterns if you generate others;
-#  keep `src/mojo/wasm/` version-controlled if it holds final .wasm)
+# Cloudflare Wrangler & Miniflare
 # =========================================
-*.mojo
-*.🔥
+.mf/ # Miniflare local state
+.wrangler/ # Wrangler config, cache, and local dev state
+# /.wrangler/tmp/ # Already covered by .wrangler/
+
+# Local D1 development databases (Wrangler creates these in .wrangler/state/d1)
+# .d1/ # This might be redundant if .wrangler/ covers it, but explicit can be good.
+
+# =========================================
+# Testing - Playwright
+# =========================================
+test-results/
+playwright-report/
+playwright/.cache/
+playwright/.auth/ # Stores authentication state for tests
+
+# =========================================
+# Drizzle ORM
+# =========================================
+# drizzle.config.ts.snap # Snapshot for Drizzle config (if used)
+# If Drizzle Kit generates other local files/folders outside of .wrangler, add them here.
+# For example, if you have a local SQLite file for Drizzle development not managed by Wrangler:
+# *.db
+# *.sqlite
+# *.sqlite3
+# properaccount-dev.db # Or specific local DB names if not covered by .d1/ or .wrangler/
+
+# =========================================
+# Mojo Language Specifics
+# =========================================
+# Python cache files (if Python is used in the Mojo toolchain/workflow)
 **/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .ipynb_checkpoints
 
+# Mojo build artifacts (if any, that are NOT part of the committed .wasm files in src/)
+# Example: if `mojo build` creates specific output files/folders locally
+# that aren't in `dist/` or `.astro/` and aren't meant to be committed.
+# *.mojopkg
+# .mojo_build_cache/
+
+# IMPORTANT: *.mojo and *.🔥 are typically Mojo SOURCE files.
+# If your Mojo source files are in `src/mojo/`, they should be version controlled.
+# DO NOT ignore them if they are source code.
+# The following lines would ignore source files. Remove them if .mojo/.🔥 are your sources.
+# *.mojo
+# *.🔥
+
+# If you compile Mojo to WASM and commit the .wasm files (e.g., in src/mojo/wasm/),
+# ensure that directory is NOT ignored.
+
 # =========================================
-# Other
+# Other Frameworks/Tools (if used)
 # =========================================
-*.log
-*.db
-*.sqlite
-*.sqlite3
+.vercel # Vercel output (if ever used)
+.turbo # Turborepo cache (if ever used)
+
+# =========================================
+# Generic Database files (if not covered by .d1/ or specific names)
+# =========================================
+# *.db
+# *.sqlite
+# *.sqlite3
+# properaccount-dev.db # Example if you have a specific local dev db file

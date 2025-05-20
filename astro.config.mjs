@@ -1,3 +1,4 @@
+// astro.config.mjs
 import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
 import alpinejs from "@astrojs/alpinejs";
@@ -5,43 +6,48 @@ import UnoCSS from "unocss/astro";
 
 // https://astro.build/config
 export default defineConfig({
-  // Render output as server-side
+  // Render output as server-side, which is necessary for dynamic features
+  // and integrations like Auth.js[cite: 625, 1557].
   output: "server",
   adapter: cloudflare({
-    mode: "directory",
-    functionPerRoute: false,
+    mode: "directory", // Standard mode for Cloudflare Pages deployments.
+    functionPerRoute: false, // A single function for all routes is often simpler to manage initially.
     runtime: {
-      mode: "local",
-      persistToStorage: true,
+      mode: "local", // For `wrangler pages dev`
+      persistToStorage: true, // Good for local simulation of KV, D1, R2.
     },
-    // If you decide to use the adapter’s built-in session:
+    // The project plan indicates use of a custom KV-based session
+    // management via `src/lib/auth/session.ts`[cite: 7, 1487, 1533], rather than this adapter's built-in sessions.
+    // Thus, keeping this commented out is correct.
+    // Ensure your `SESSION_KV` binding is correctly configured in `wrangler.toml` and development scripts.
     // sessions: {
     //   enabled: true,
-    //   kvBinding: "SESSION", // ensure this matches your wrangler.toml
-    //   secret: process.env.SESSION_SECRET
+    //   kvBinding: "SESSION_KV", // Ensure this matches your wrangler.toml if you were to use it
+    //   secret: process.env.SESSION_SECRET // Ensure this is a strong, unique secret in your .env
     // }
-    //
-    // Otherwise, relying solely on your custom SESSION_KV:
-    // - Confirm SESSION_KV is bound in wrangler.toml
-    // - The adapter’s session warning can be ignored if unused
   }),
   integrations: [
-    alpinejs(),
+    // If using Astro's View Transitions, a custom entrypoint for Alpine.js
+    // helps maintain state, as documented in "Alpinejs and UnoCSS.pdf" (Page 2)[cite: 569].
+    // Your `src/scripts/alpine-setup.js` file is suitable for this.
+    alpinejs({ entrypoint: '/src/scripts/alpine-setup.js' }),
     UnoCSS({
-      injectReset: true,
+      injectReset: true, // Applies a CSS reset for consistent styling[cite: 584].
     }),
   ],
   vite: {
     build: {
-      sourcemap: true,
+      sourcemap: true, // Enables sourcemaps for easier debugging of built assets.
     },
     ssr: {
-      // No external packages excluded from SSR bundling
+      // `noExternal: []` is a good default. If issues arise with packages not designed
+      // for the Workers runtime, they might need to be added here to force bundling.
       noExternal: []
     },
   },
-  // If you use Astro’s Image component at runtime on Cloudflare,
-  // you may need a no-op image service:
+  // The no-op image service is correctly commented out.
+  // Enable this if you use Astro's <Image /> component or getImage() for runtime image processing
+  // on Cloudflare, as Cloudflare Workers do not support the default Squoosh/Sharp services.
   // image: {
   //   service: {
   //     entrypoint: "astro/assets/services/noop"

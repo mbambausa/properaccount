@@ -1,69 +1,117 @@
 # wrangler.toml
 name = "properaccount"
 compatibility_date = "2025-05-18"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat"] // Correct: Essential for using Node.js APIs in Workers.
 
-pages_build_output_dir = "./dist"
+pages_build_output_dir = "./dist" // Correct: Standard for Astro projects deploying to Cloudflare Pages.
 
+# =========================================
+# Production Environment Configuration
+# =========================================
 [env.production]
-name = "properaccount-prod"
+name = "properaccount-prod" // Good: Clear naming for your production deployment.
 
+# --- Production D1 Database ---
 [[env.production.d1_databases]]
-binding = "DATABASE"
-database_name = "properaccount-db-prod"
-database_id = "bc1c31a7-957e-4086-aa55-54384fe0c80a"
-migrations_dir = "src/cloudflare/d1/migrations"
+binding = "DATABASE" # How your code will access this D1 instance (e.g., env.DATABASE)
+database_name = "properaccount-db-prod" # Name of the D1 database in Cloudflare dashboard
+database_id = "bc1c31a7-957e-4086-aa55-54384fe0c80a" # Unique ID of your production D1 database
+migrations_dir = "cloudflare/d1/migrations" # Correct: Path to your D1 migration files.
+
+# --- Production KV Namespaces ---
+[[env.production.kv_namespaces]]
+binding = "CONFIG_KV" # Binding name for configuration data
+id = "d34d0bbafca1424d8c678aade9a60dce" # Unique ID of your production CONFIG_KV namespace
 
 [[env.production.kv_namespaces]]
-binding = "CONFIG_KV"
-id = "d34d0bbafca1424d8c678aade9a60dce"
+binding = "REPORT_CACHE_KV" # Binding name for caching reports
+id = "e1be52c7b89845c08dc30eb5f0af4562" # Unique ID of your production REPORT_CACHE_KV namespace
 
 [[env.production.kv_namespaces]]
-binding = "REPORT_CACHE_KV"
-id = "e1be52c7b89845c08dc30eb5f0af4562"
+binding = "SESSION_KV" # Binding name for user session data
+id = "ed0fcd9e4e26484ca2d299f47439c33d" # Unique ID of your production SESSION_KV namespace
 
-[[env.production.kv_namespaces]]
-binding = "SESSION_KV"
-id = "ed0fcd9e4e26484ca2d299f47439c33d"
-
+# --- Production R2 Bucket ---
 [[env.production.r2_buckets]]
-binding = "DOCUMENTS_BUCKET"
-bucket_name = "properaccount-documents-prod"
+binding = "DOCUMENTS_BUCKET" # Binding name for document storage
+bucket_name = "properaccount-documents-prod" # Name of your production R2 bucket
 
-# Queues remain commented out as they require a Workers Paid Plan
+# --- Production Queues (Commented Out - Good for Zero-Cost Start) ---
+# Queues typically require a Workers Paid Plan.
+# This is correctly commented out if you're starting with the free tier.
 # [[env.production.queues.producers]]
 # queue = "background-tasks-prod"
 # binding = "BACKGROUND_TASKS_QUEUE"
 
-# Default Bindings for local development
+
+# =========================================
+# Default Bindings for Local Development (`wrangler pages dev`)
+# =========================================
+# These settings are used by Wrangler to emulate Cloudflare services locally.
+# For D1 and KV, using distinct `database_name` and placeholder `id`s for local
+# development is crucial to avoid conflicts with production resources, especially
+# when `persistToStorage = true` is used in astro.config.mjs for local emulation.
+
+# --- Local D1 Database ---
 [[d1_databases]]
 binding = "DATABASE"
-database_name = "properaccount-db-dev"
-database_id = "bc1c31a7-957e-4086-aa55-54384fe0c80a"
-migrations_dir = "src/cloudflare/d1/migrations"
+database_name = "properaccount-db-dev" # Distinct name for the local D1 database file.
+# CRITICAL: `database_id` is correctly omitted or points to a *separate dev/preview D1 instance* if you have one.
+# Using the production `database_id` here would be risky.
+# For purely local emulation, Wrangler uses `database_name` to create a local .sqlite file.
+migrations_dir = "cloudflare/d1/migrations" # Correct path.
 
+# --- Local KV Namespaces ---
 [[kv_namespaces]]
 binding = "CONFIG_KV"
-id = "d34d0bbafca1424d8c678aade9a60dce"
+# CRITICAL: Using a placeholder `id` is good for local emulation.
+# Wrangler will use the binding name for local persistence.
+# Avoid using production KV namespace IDs here.
+id = "local-config-kv-placeholder-for-properaccount"
 
 [[kv_namespaces]]
 binding = "REPORT_CACHE_KV"
-id = "local-report-cache-kv-placeholder"
+id = "local-report-cache-kv-placeholder" # Good placeholder for local emulation.
 
 [[kv_namespaces]]
 binding = "SESSION_KV"
-id = "local-session-kv-placeholder"
+id = "local-session-kv-placeholder" # Good placeholder for local emulation. This is crucial for local auth.
 
+# --- Local R2 Bucket ---
 [[r2_buckets]]
 binding = "DOCUMENTS_BUCKET"
-bucket_name = "properaccount-documents-dev"
+bucket_name = "properaccount-documents-dev" # Distinct name for the local R2 bucket emulation.
+# preview_bucket_name = "properaccount-documents-dev-preview" # Optional: if you have a separate R2 bucket for previews.
 
-# Queues remain commented out as they require a Workers Paid Plan
+# --- Local Queues (Commented Out) ---
 # [[queues.producers]]
 # queue = "background-tasks-dev"
 # binding = "BACKGROUND_TASKS_QUEUE"
 
+
+# =========================================
+# Wrangler `dev` command settings (mostly for standalone Worker projects)
+# =========================================
+# For `wrangler pages dev`, these settings might be less critical or overridden by defaults/flags.
+# However, they don't harm.
 [dev]
 ip = "127.0.0.1"
 port = 8788
 local_protocol = "http"
+
+```
+
+**No further updates seem necessary for your `wrangler.toml` file at this time.**
+
+**Key Confirmations:**
+
+1.  **Separation of Concerns**:
+    * **Production (`[env.production]`)**: Correctly uses specific IDs and names for your live Cloudflare resources.
+    * **Local Development (top-level `[[d1_databases]]`, `[[kv_namespaces]]`, etc.)**: Wisely uses distinct `_name` properties (e.g., `database_name = "properaccount-db-dev"`) and placeholder `id`s for KV namespaces. This is critical for ensuring your local development environment (`wrangler pages dev --persist`) creates and uses separate local storage (e.g., in the `.wrangler` directory) and doesn't accidentally interact with your production data.
+        * For the local D1 database, omitting `database_id` is the correct approach if you want Wrangler to create a local SQLite file. If you had a separate D1 instance on Cloudflare specifically for development, you would put *its* ID there.
+2.  **`migrations_dir`**: The path `cloudflare/d1/migrations` is consistent with your project structure.
+3.  **Bindings**: All necessary bindings (`DATABASE`, `CONFIG_KV`, `SESSION_KV`, `REPORT_CACHE_KV`, `DOCUMENTS_BUCKET`) are defined for both environments, aligning with your `src/env.d.ts` and `package.json` local dev script.
+4.  **Queues**: Keeping queues commented out is appropriate if you're not yet using them or are avoiding paid features initially.
+5.  **`[dev]` block**: Standard settings for local development.
+
+Your `wrangler.toml` is well configured to support your project's deployment to Cloudflare Pages and local development with Wrangler, ensuring a good separation between your production and local development resourc
