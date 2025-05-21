@@ -116,3 +116,8 @@ playwright/.auth/ # Stores authentication state for tests
 # *.sqlite
 # *.sqlite3
 # properaccount-dev.db # Example if you have a specific local dev db file
+# Build artifacts
+.astro/
+.DS_Store
+dist/
+.wrangler/

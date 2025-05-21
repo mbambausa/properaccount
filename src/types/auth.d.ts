@@ -7,81 +7,91 @@ export type UserRole = 'admin' | 'user' | 'owner' | 'manager' | 'viewer';
 
 /**
  * Represents the permissions a user can have within an entity.
+ * Using a more structured approach for potentially easier management.
  */
-export type Permission = 
-  // Entity management permissions
-  | 'entity.view'
-  | 'entity.edit'
-  | 'entity.delete'
-  | 'entity.settings'
-  | 'entity.users.manage'
-  
-  // Account/transaction permissions
-  | 'accounts.view'
-  | 'accounts.create'
-  | 'accounts.edit'
-  | 'accounts.delete'
-  | 'transactions.view'
-  | 'transactions.create'
-  | 'transactions.edit'
-  | 'transactions.delete'
-  | 'transactions.approve'
-  | 'transactions.export'
-  
-  // Report permissions
-  | 'reports.view'
-  | 'reports.create'
-  | 'reports.export'
-  
-  // Document permissions
-  | 'documents.view'
-  | 'documents.upload'
-  | 'documents.delete'
-  
-  // Settings and configuration
-  | 'settings.view'
-  | 'settings.edit';
+export enum Permission {
+  // Entity Management
+  ViewEntity = 'entity:view',
+  EditEntity = 'entity:edit',
+  DeleteEntity = 'entity:delete',
+  ManageEntitySettings = 'entity:settings:manage',
+  ManageEntityUsers = 'entity:users:manage',
+
+  // Accounting & Transactions
+  ViewAccounts = 'accounts:view',
+  CreateAccounts = 'accounts:create',
+  EditAccounts = 'accounts:edit',
+  DeleteAccounts = 'accounts:delete',
+  ViewTransactions = 'transactions:view',
+  CreateTransactions = 'transactions:create',
+  EditTransactions = 'transactions:edit',
+  DeleteTransactions = 'transactions:delete',
+  ApproveTransactions = 'transactions:approve',
+  ExportTransactions = 'transactions:export',
+
+  // Reporting
+  ViewReports = 'reports:view',
+  CreateReports = 'reports:create', // Might mean generating/customizing
+  ExportReports = 'reports:export',
+
+  // Document Management
+  ViewDocuments = 'documents:view',
+  UploadDocuments = 'documents:upload',
+  DeleteDocuments = 'documents:delete',
+  ManageDocumentPermissions = 'documents:permissions:manage',
+
+  // Loan Management
+  ViewLoans = 'loans:view',
+  CreateLoans = 'loans:create',
+  EditLoans = 'loans:edit',
+  DeleteLoans = 'loans:delete',
+  ManageLoanPayments = 'loans:payments:manage',
+
+  // Tax Management
+  ViewTaxInfo = 'tax:view',
+  EditTaxInfo = 'tax:edit',
+
+  // Global Settings (App-level, not entity-specific)
+  ManageAppSettings = 'app:settings:manage',
+  ViewAuditLogs = 'app:auditlogs:view',
+}
+
 
 /**
  * Represents an active user session.
+ * This is likely managed by your custom session store (e.g., SESSION_KV).
  */
 export interface Session {
-  /** Unique identifier for the session */
+  /** Unique identifier for the session (e.g., secure random string) */
   readonly id: string;
-  
+
   /** ID of the user this session belongs to */
   readonly userId: string;
-  
-  /** Timestamp (Unix seconds) when the session was created */
+
+  /** Timestamp (Unix milliseconds or seconds) when the session was created */
   readonly createdAt: number;
-  
-  /** Timestamp (Unix seconds) when the session expires */
+
+  /** Timestamp (Unix milliseconds or seconds) when the session expires */
   expiresAt: number;
-  
+
   /** Optional arbitrary data to store with the session */
   data?: {
-    /** IP address the session was created from */
+    /** IP address the session was created from (for security auditing) */
     ip?: string;
-    
-    /** User agent the session was created with */
+
+    /** User agent string from the client that created the session */
     userAgent?: string;
-    
-    /** Timestamp of the last activity in this session */
-    lastActivity?: number;
-    
-    /** Whether the session was extended */
-    extended?: boolean;
-    
-    /** Number of times the session was extended */
-    extensionCount?: number;
-    
-    /** Current entity context for the session */
+
+    /** Timestamp of the last activity in this session (for sliding sessions) */
+    lastActivityAt?: number;
+
+    /** Current entity ID the user is operating within (for multi-tenancy) */
     currentEntityId?: string;
-    
-    /** Whether this session has been fully authenticated (useful for MFA) */
-    fullyAuthenticated?: boolean;
-    
-    /** Any additional data */
+
+    /** Indicates if MFA has been completed for this session */
+    isMfaVerified?: boolean;
+
+    /** Any additional custom data */
     [key: string]: any;
   };
 }
@@ -90,286 +100,250 @@ export interface Session {
  * Represents a user account in the system.
  */
 export interface User {
-  /** Unique identifier for the user */
+  /** Unique identifier for the user (UUID) */
   readonly id: string;
-  
-  /** User's email address (used for login) */
+
+  /** User's email address (used for login, should be unique) */
   email: string;
-  
+
   /** User's display name */
-  name?: string;
-  
-  /** User's permission role in the system */
-  role: UserRole;
-  
-  /** Timestamp (Unix seconds) when the user account was created */
+  name?: string | null;
+
+  /** Hashed password (NEVER store plaintext) - This is for data representation, not direct exposure. */
+  hashedPassword?: string; // Should not be sent to client
+
+  /** User's primary role in the application (global role) */
+  role: UserRole; // Could be 'admin', 'user' etc. Entity-specific roles are in EntityAccess.
+
+  /** Timestamp (Unix ms or s) when the user account was created */
   readonly createdAt: number;
-  
-  /** Timestamp (Unix seconds) when the user account was last updated */
+
+  /** Timestamp (Unix ms or s) when the user account was last updated */
   updatedAt: number;
-  
-  /** Timestamp (Unix seconds) when the user's email was verified, if applicable */
-  verifiedAt?: number;
-  
+
+  /** Timestamp (Unix ms or s) when the user's email was verified, if applicable */
+  emailVerifiedAt?: number | null;
+
   /** URL to the user's profile image */
-  imageUrl?: string;
-  
+  imageUrl?: string | null;
+
   /** Flags indicating preferences or states for this user */
   flags?: {
-    /** Whether the user needs to change their password on next login */
     forcePasswordChange?: boolean;
-    
-    /** Whether the user has completed onboarding */
     onboardingComplete?: boolean;
-    
-    /** Whether the user account is locked */
-    locked?: boolean;
-    
-    /** Whether multi-factor authentication is enabled */
-    mfaEnabled?: boolean;
-    
-    /** Whether the user has admin-level access */
-    isAdmin?: boolean;
-    
-    /** Custom flags can be added as needed */
+    isLocked?: boolean; // Renamed from 'locked' for clarity
+    isMfaEnabled?: boolean; // Renamed from 'mfaEnabled'
+    // isAdmin flag might be redundant if `role: 'admin'` is used, unless it's a super-admin concept.
     [key: string]: boolean | undefined;
   };
-  
-  /** Last login timestamp (Unix seconds) */
-  lastLoginAt?: number;
-  
-  /** The last IP address the user logged in from */
-  lastLoginIp?: string;
+
+  /** Last login timestamp (Unix ms or s) */
+  lastLoginAt?: number | null;
+
+  /** The last IP address the user logged in from (for security auditing) */
+  lastLoginIp?: string | null;
 }
 
 /**
- * Represents an entity (organization, company, etc.) in a multi-tenant system.
- */
-export interface Entity {
-  /** Unique identifier for the entity */
-  readonly id: string;
-  
-  /** Entity name */
-  name: string;
-  
-  /** Optional description */
-  description?: string;
-  
-  /** Type of entity */
-  type: 'company' | 'personal' | 'trust' | 'partnership';
-  
-  /** Parent entity ID, if this is a child entity */
-  parentId?: string | null;
-  
-  /** Timestamp (Unix seconds) when the entity was created */
-  readonly createdAt: number;
-  
-  /** Timestamp (Unix seconds) when the entity was last updated */
-  updatedAt: number;
-  
-  /** ID of the user who created this entity */
-  createdBy: string;
-  
-  /** Settings for this entity */
-  settings?: Record<string, any>;
-  
-  /** Custom fields specific to this entity */
-  customFields?: Record<string, any>;
-}
-
-/**
- * Represents a user's access to an entity.
+ * Represents a user's access to an entity, including their role and specific permissions.
+ * This links Users to Entities in a multi-tenant setup.
  */
 export interface EntityAccess {
+  /** Unique ID for this access record (optional, depends on DB schema) */
+  id?: string;
+
   /** Entity the access pertains to */
   entityId: string;
-  
+
   /** User who has access */
   userId: string;
-  
-  /** User's role within this entity */
-  role: UserRole;
-  
-  /** Specific permissions granted to the user for this entity */
+
+  /** User's role within this specific entity (e.g., 'owner', 'manager', 'viewer') */
+  role: UserRole; // This role is specific to the entity
+
+  /** Specific permissions granted to the user for this entity (overrides or complements role) */
   permissions: Permission[];
-  
-  /** Timestamp (Unix seconds) when access was granted */
+
+  /** Timestamp (Unix ms or s) when access was granted */
   readonly grantedAt: number;
-  
-  /** Timestamp (Unix seconds) when access was last updated */
+
+  /** Timestamp (Unix ms or s) when access was last updated */
   updatedAt: number;
-  
-  /** User who granted or last updated this access */
-  grantedBy: string;
+
+  /** User ID of who granted or last updated this access */
+  grantedByUserId: string; // Renamed from grantedBy for clarity
 }
 
 /**
- * Represents a linked third-party authentication provider account.
+ * Represents a linked third-party authentication provider account (e.g., Google, GitHub).
  */
-export interface AuthAccount {
+export interface AuthProviderAccount { // Renamed from AuthAccount for clarity
   /** Identifier of the authentication provider (e.g., 'google', 'github') */
-  readonly providerId: string;
-  
+  readonly provider: string; // Renamed from providerId
+
   /** User ID from the provider's system */
   readonly providerUserId: string;
-  
+
   /** ID of the user in our system that this provider account is linked to */
   readonly userId: string;
-  
-  /** Timestamp (Unix seconds) when this provider link was created */
+
+  /** Timestamp (Unix ms or s) when this provider link was created */
   readonly createdAt: number;
-  
-  /** Timestamp (Unix seconds) when this provider link was last updated */
+
+  /** Timestamp (Unix ms or s) when this provider link was last updated */
   updatedAt: number;
-  
-  /** Provider-specific account data */
-  providerAccountData?: Record<string, any>;
+
+  /** Additional provider-specific account data (e.g., access_token, refresh_token - handle securely) */
+  providerData?: Record<string, any>; // Renamed from providerAccountData
 }
 
 /**
- * Represents a token used for email verification or password reset.
+ * Represents a token used for purposes like email verification or password reset.
  */
 export interface VerificationToken {
-  /** Email or other identifier this token was issued to */
+  /** The identifier this token is for (e.g., email address, user ID) */
   readonly identifier: string;
-  
-  /** The actual token value (should be hashed in storage) */
-  readonly token: string;
-  
-  /** Timestamp (Unix seconds) when this token expires */
+
+  /** The actual token value (should be hashed if stored persistently) */
+  readonly token: string; // The plaintext token, if transient. Or a reference to a hashed one.
+
+  /** Timestamp (Unix ms or s) when this token expires */
   readonly expiresAt: number;
-  
-  /** Timestamp (Unix seconds) when this token was created */
+
+  /** Timestamp (Unix ms or s) when this token was created */
   readonly createdAt: number;
-  
-  /** Type of verification ('email', 'password-reset', etc.) */
-  readonly type?: string;
+
+  /** Type of verification (e.g., 'EMAIL_VERIFICATION', 'PASSWORD_RESET') */
+  readonly type: string;
+
+  /** Whether the token has been used */
+  usedAt?: number | null;
 }
 
 /**
  * Represents a user activity audit log entry.
  */
 export interface ActivityLog {
-  /** Unique identifier for this log entry */
-  readonly id?: string;
-  
+  /** Unique identifier for this log entry (UUID) */
+  readonly id: string;
+
   /** ID of the user who performed the action (if authenticated) */
-  readonly userId?: string;
-  
+  readonly userId?: string | null;
+
   /** ID of the entity in which the action was performed (if applicable) */
-  readonly entityId?: string;
-  
-  /** Description of the action performed */
-  readonly action: string;
-  
+  readonly entityId?: string | null;
+
+  /** Description of the action performed (e.g., 'USER_LOGIN', 'TRANSACTION_CREATED') */
+  readonly action: string; // Consider using an enum for actions
+
   /** IP address from which the action was performed */
-  readonly ipAddress?: string;
-  
+  readonly ipAddress?: string | null;
+
   /** User agent of the client used to perform the action */
-  readonly userAgent?: string;
-  
-  /** Additional contextual data about the action */
-  readonly metadata?: Record<string, any>;
-  
-  /** Timestamp (Unix seconds) when this activity occurred */
+  readonly userAgent?: string | null;
+
+  /** Additional contextual data about the action (e.g., parameters, changes made) */
+  readonly metadata?: Record<string, any> | null;
+
+  /** Timestamp (Unix ms or s) when this activity occurred */
   readonly createdAt: number;
-  
-  /** Status of the action (e.g., 'success', 'failure', 'attempted') */
-  readonly status?: 'success' | 'failure' | 'attempted';
-  
-  /** Resource type that was affected (e.g., 'user', 'entity', 'transaction') */
-  readonly resourceType?: string;
-  
+
+  /** Status of the action (e.g., 'SUCCESS', 'FAILURE', 'ATTEMPT') */
+  readonly status?: 'SUCCESS' | 'FAILURE' | 'ATTEMPT'; // Consider using an enum
+
+  /** Resource type that was affected (e.g., 'User', 'Entity', 'Transaction') */
+  readonly resourceType?: string | null; // Consider using an enum
+
   /** ID of the resource that was affected */
-  readonly resourceId?: string;
+  readonly resourceId?: string | null;
 }
 
 /**
- * Represents configuration for multi-factor authentication.
+ * Represents configuration for multi-factor authentication for a user.
  */
-export interface MfaConfig {
+export interface MfaConfiguration { // Renamed from MfaConfig
   /** User ID this configuration belongs to */
-  userId: string;
-  
-  /** Type of MFA */
-  type: 'totp' | 'sms' | 'email';
-  
-  /** Secret key for TOTP */
-  secret?: string;
-  
-  /** Phone number for SMS */
+  readonly userId: string;
+
+  /** Type of MFA method */
+  readonly type: 'totp' | 'sms' | 'email_otp' | 'backup_code';
+
+  /** Secret key for TOTP (encrypted if stored) */
+  secret?: string; // Store securely
+
+  /** Phone number for SMS (if type is 'sms') */
   phoneNumber?: string;
-  
-  /** Backup email for email-based MFA */
-  backupEmail?: string;
-  
-  /** Whether this MFA method is enabled */
-  enabled: boolean;
-  
-  /** Timestamp (Unix seconds) when this configuration was created */
+
+  /** Whether this MFA method is currently enabled by the user */
+  isEnabled: boolean;
+
+  /** Timestamp (Unix ms or s) when this configuration was created */
   readonly createdAt: number;
-  
-  /** Timestamp (Unix seconds) when this configuration was last updated */
+
+  /** Timestamp (Unix ms or s) when this configuration was last updated */
   updatedAt: number;
-  
-  /** Timestamp (Unix seconds) when this MFA method was last used */
-  lastUsedAt?: number;
+
+  /** Timestamp (Unix ms or s) when this MFA method was last successfully used */
+  lastUsedAt?: number | null;
+
+  /** Label for the MFA method (e.g., "Authenticator App", "Phone ending in 1234") */
+  label?: string;
 }
 
 /**
  * Password change/reset request data structure.
  */
-export interface PasswordChangeRequest {
-  /** Current password (required when user is logged in) */
+export interface PasswordUpdateRequest { // Renamed from PasswordChangeRequest
+  /** Current password (required when user is logged in and changing their own password) */
   currentPassword?: string;
-  
+
   /** New password to set */
   newPassword: string;
-  
-  /** Confirmation of new password (for validation) */
+
+  /** Confirmation of new password (for client-side and server-side validation) */
   confirmPassword: string;
-  
-  /** Reset token (only for password reset, not change) */
+
+  /** Reset token (only for password reset flow, not for logged-in user changing password) */
   resetToken?: string;
 }
 
 /**
- * Represents an invite to an entity.
+ * Represents an invitation for a user to join an entity.
  */
-export interface EntityInvite {
-  /** Unique identifier for this invite */
+export interface EntityInvitation { // Renamed from EntityInvite
+  /** Unique identifier for this invitation (UUID) */
   readonly id: string;
-  
-  /** Email address the invite was sent to */
+
+  /** Email address the invitation was sent to */
   email: string;
-  
-  /** ID of the entity the user is invited to */
+
+  /** ID of the entity the user is invited to join */
   entityId: string;
-  
-  /** Role the user will have if they accept */
+
+  /** Role the user will be assigned in the entity if they accept */
   role: UserRole;
-  
-  /** Specific permissions to grant */
+
+  /** Specific permissions to grant upon acceptance (can augment role-based permissions) */
   permissions?: Permission[];
-  
-  /** ID of the user who created the invite */
-  createdBy: string;
-  
-  /** Timestamp (Unix seconds) when the invite was created */
+
+  /** ID of the user who created/sent the invitation */
+  readonly invitedByUserId: string; // Renamed from createdBy
+
+  /** Timestamp (Unix ms or s) when the invitation was created */
   readonly createdAt: number;
-  
-  /** Timestamp (Unix seconds) when the invite expires */
+
+  /** Timestamp (Unix ms or s) when the invitation expires */
   expiresAt: number;
-  
-  /** Custom message included with the invite */
-  message?: string;
-  
-  /** Whether the invite has been accepted */
-  accepted?: boolean;
-  
-  /** Timestamp (Unix seconds) when the invite was accepted, if applicable */
-  acceptedAt?: number;
-  
-  /** ID of the user created from this invite, if applicable */
-  acceptedByUserId?: string;
+
+  /** Custom message included with the invitation */
+  message?: string | null;
+
+  /** Status of the invitation */
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+
+  /** Timestamp (Unix ms or s) when the invite was accepted, if applicable */
+  acceptedAt?: number | null;
+
+  /** ID of the user who accepted this invite (could be a new or existing user) */
+  acceptedByUserId?: string | null;
 }

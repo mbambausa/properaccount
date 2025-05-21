@@ -1,55 +1,97 @@
 # wrangler.toml
 name = "properaccount"
-compatibility_date = "2025-05-18"
+compatibility_date = "2025-05-18" # Keep this up-to-date with desired CF features/fixes
 
-# Avoid nodejs_compat flag when possible for better performance
-# Only include it if you absolutely need Node.js APIs that aren't available in Workers
+# Avoid nodejs_compat if possible for optimal performance and smallest footprint.
+# Only include if a dependency *requires* Node.js specific APIs not polyfilled by Workers. [cite: 466, 532]
 compatibility_flags = []
 
-pages_build_output_dir = "./dist" # Standard for Astro projects deploying to Cloudflare Pages.
+pages_build_output_dir = "./dist" # Standard for Astro
 
-# [site] configuration can be useful if Wasm files are fetched from the root of dist.
-# Astro typically serves from the `public` directory copied to `dist`.
-# If Wasm files are placed in `public/mojo/`, they will be at `dist/mojo/`.
-# If `Workspace('/mojo/loan-engine.wasm')` is used, ensure files are at `dist/mojo/loan-engine.wasm`.
+# [site] is crucial for serving static assets, including any Wasm/Mojo files
+# placed in the `public` directory (which Astro copies to `dist`).
 [site]
 bucket = "./dist"
+
+# Main entry point for your application, typically handled by the Astro adapter.
+# main = "./dist/_worker.js" # This is usually set by the Astro Cloudflare adapter automatically.
 
 # =========================================
 # Production Environment Configuration
 # =========================================
 [env.production]
 name = "properaccount-prod"
-# Environment variables - values will be set through Cloudflare dashboard
-# or using wrangler secrets for local development
+# vars are for non-secret configuration. Secrets should be set via `wrangler secret put` or dashboard.
 vars = { ENVIRONMENT = "production" }
 
 # --- Production D1 Database ---
+# Define only one D1 binding named DATABASE for the main app shell.
+# Tenant-specific DBs will be handled dynamically in code (e.g. DATABASE_${entityId}) [cite: 1682]
 [[env.production.d1_databases]]
-binding = "DATABASE"
-database_name = "properaccount-db-prod"
-database_id = "bc1c31a7-957e-4086-aa55-54384fe0c80a" # Replace with your actual production D1 ID
+binding = "DATABASE" # This will be the primary D1 for core app data / metadata.
+database_name = "properaccount-db-prod" # Name of your D1 database in Cloudflare.
+database_id = "YOUR_PRODUCTION_D1_DATABASE_ID" # Placeholder: Replace with your actual Production D1 DB ID.
 migrations_dir = "cloudflare/d1/migrations"
+preview_database_id = "YOUR_PREVIEW_D1_DATABASE_ID" # Placeholder: For `wrangler pages dev --d1=DATABASE`
 
 # --- Production KV Namespaces ---
 [[env.production.kv_namespaces]]
 binding = "CONFIG_KV"
-id = "d34d0bbafca1424d8c678aade9a60dce" # Replace with your actual production KV ID
+id = "YOUR_PRODUCTION_CONFIG_KV_ID" # Placeholder
+preview_id = "YOUR_PREVIEW_CONFIG_KV_ID" # Placeholder: For local dev KV simulation
 
 [[env.production.kv_namespaces]]
 binding = "REPORT_CACHE_KV"
-id = "e1be52c7b89845c08dc30eb5f0af4562" # Replace with your actual production KV ID
+id = "YOUR_PRODUCTION_REPORT_CACHE_KV_ID" # Placeholder
+preview_id = "YOUR_PREVIEW_REPORT_CACHE_KV_ID" # Placeholder
 
 [[env.production.kv_namespaces]]
-binding = "SESSION_KV"
-id = "ed0fcd9e4e26484ca2d299f47439c33d" # Replace with your actual production KV ID for sessions
+binding = "SESSION_KV" # For custom session management
+id = "YOUR_PRODUCTION_SESSION_KV_ID" # Placeholder
+preview_id = "YOUR_PREVIEW_SESSION_KV_ID" # Placeholder
 
 # --- Production R2 Bucket ---
 [[env.production.r2_buckets]]
 binding = "DOCUMENTS_BUCKET"
-bucket_name = "properaccount-documents-prod" # Replace with your actual production R2 bucket name
+bucket_name = "properaccount-documents-prod" # Bucket name in Cloudflare.
+preview_bucket_name = "properaccount-documents-preview" # Placeholder: For local dev R2 simulation
 
 # --- Production Queues ---
-# Uncomment when you're ready to use Queues
+# As per project plan, queues are for Phase 3+ [cite: 1842]
 # [[env.production.queues.producers]]
-# queue = "background-tasks-prod
+#   queue = "background-tasks-prod"
+#   binding = "BACKGROUND_TASKS_QUEUE" # Binding name for the producer in your Worker
+
+# [[env.production.queues.consumers]]
+#   queue = "background-tasks-prod"
+#   max_batch_size = 10
+#   max_batch_timeout = 30 # seconds
+#   max_retries = 3
+#   # dead_letter_queue = "dead-background-tasks-prod" # Optional: for failed messages
+
+# =========================================
+# Staging Environment Configuration (Example)
+# =========================================
+# [env.staging]
+# name = "properaccount-staging"
+# vars = { ENVIRONMENT = "staging" }
+# routes = ["staging.properaccount.com/*"] # Example route
+# [[env.staging.d1_databases]]
+# binding = "DATABASE"
+# database_name = "properaccount-db-staging"
+# database_id = "YOUR_STAGING_D1_DATABASE_ID"
+# migrations_dir = "cloudflare/d1/migrations"
+# preview_database_id = "YOUR_STAGING_PREVIEW_D1_DB_ID"
+# ... other staging bindings for KV, R2, Queues ...
+
+# =========================================
+# Local Development Overrides using .dev.vars
+# =========================================
+# For local development (`wrangler pages dev`), create a `.dev.vars` file in the root.
+# Example .dev.vars content:
+# ```
+# ENVIRONMENT="development"
+# # For D1 local dev, wrangler creates d1/[binding_name_UPPERCASE] folders in .wrangler/state/v3/d1
+# # For KV, use actual preview_id from production or wrangler kv:namespace create --preview NAMESPACE_NAME
+# # For R2, wrangler attempts to use Miniflare's in-memory R2 or you can configure a local Minio instance.
+# ```

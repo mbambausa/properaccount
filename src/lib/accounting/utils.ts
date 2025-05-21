@@ -1,47 +1,53 @@
-// src/lib/accounting/utils.ts
+/* src/lib/accounting/utils.ts */
 /**
  * Utilities for handling numeric conversions between different representations
  * in the accounting system. Ensures consistency between database storage format
  * and application logic format.
  */
 
-import { MojoDecimal, newMojoDecimal, RoundingMode } from '../mojo/common/financial';
+// Import MojoDecimal utilities and the shared RoundingMode from financial.ts
+import { MojoDecimal, newMojoDecimal, RoundingMode } from './financial';
 
 /**
- * Converts a monetary amount in cents (used in database) to a MojoDecimal object.
- * 
+ * Converts a monetary amount in cents (integer, used in database) to a MojoDecimal object
+ * representing the value in main currency units (e.g., dollars).
+ *
  * @param cents Integer amount in cents (e.g., 12345 for $123.45)
- * @returns A MojoDecimal representation of the amount in dollars
+ * @returns A MojoDecimal representation of the amount.
  */
 export function centsToMojoDecimal(cents: number): MojoDecimal {
-  // Check for invalid input
   if (!Number.isInteger(cents)) {
-    console.warn('centsToMojoDecimal received non-integer cents value:', cents);
+    console.warn(`centsToMojoDecimal received non-integer cents value: ${cents}. Precision may be affected if it's already a float.`);
   }
-  
-  // Convert cents to dollars by dividing by 100
-  return newMojoDecimal(cents / 100);
+  return newMojoDecimal(cents)
+    .dividedBy(newMojoDecimal(100), 25, RoundingMode.ROUND_HALF_EVEN);
 }
 
 /**
- * Converts a MojoDecimal amount (used in application logic) to cents for database storage.
- * Uses GAAP-compliant rounding (banker's rounding / round half to even).
- * 
- * @param value MojoDecimal amount in dollars
- * @returns Integer amount in cents for database storage
+ * Converts a MojoDecimal amount (used in application logic, representing main currency units)
+ * to an integer number of cents for database storage.
+ * Uses specified rounding mode, defaulting to GAAP-compliant rounding (ROUND_HALF_EVEN).
+ *
+ * @param value MojoDecimal amount (e.g., representing dollars).
+ * @param roundingMode The rounding mode to apply.
+ * @returns Integer amount in cents.
  */
-export function mojoDecimalToCents(value: MojoDecimal): number {
-  // Use GAAP-compliant rounding (ROUND_HALF_EVEN)
-  const dollarAmount = value.toFixed(2, RoundingMode.ROUND_HALF_EVEN);
-  return Math.round(parseFloat(dollarAmount) * 100);
+export function mojoDecimalToCents(
+  value: MojoDecimal,
+  roundingMode: RoundingMode = RoundingMode.ROUND_HALF_EVEN
+): number {
+  if (!(value instanceof MojoDecimal)) {
+    throw new Error("mojoDecimalToCents expects a MojoDecimal instance.");
+  }
+  const centsValueDecimal = value.times(newMojoDecimal(100));
+  const roundedCentsString = centsValueDecimal.toFixed(0, roundingMode);
+  return parseInt(roundedCentsString, 10);
 }
 
 /**
- * Safely converts a value to MojoDecimal regardless of input type.
- * Handles numbers, strings, or existing MojoDecimal instances.
- * 
- * @param value Number, string, or MojoDecimal to convert
- * @returns A MojoDecimal representation of the value
+ * Safely converts a value (number, string, or existing MojoDecimal) to a MojoDecimal instance.
+ * @param value The value to convert.
+ * @returns A MojoDecimal instance.
  */
 export function toMojoDecimal(value: number | string | MojoDecimal): MojoDecimal {
   if (value instanceof MojoDecimal) {
@@ -51,41 +57,44 @@ export function toMojoDecimal(value: number | string | MojoDecimal): MojoDecimal
 }
 
 /**
- * Determines if two monetary amounts are equal within a small tolerance
- * to account for floating-point rounding errors.
- * 
- * @param a First amount
- * @param b Second amount
- * @param tolerance Maximum allowed difference (default: 0.001)
- * @returns True if the amounts are effectively equal
+ * Determines if two monetary amounts are effectively equal within a small tolerance.
+ * Performs comparison using MojoDecimal for precision.
+ *
+ * @param a First amount (number, string, or MojoDecimal).
+ * @param b Second amount (number, string, or MojoDecimal).
+ * @param tolerance Maximum allowed difference as a JS number.
+ * @returns True if the amounts are considered equal within the tolerance.
  */
 export function areMonetaryAmountsEqual(
   a: number | string | MojoDecimal,
   b: number | string | MojoDecimal,
-  tolerance: number = 0.001
+  tolerance: number = 0.000001
 ): boolean {
   const aDecimal = toMojoDecimal(a);
   const bDecimal = toMojoDecimal(b);
   const difference = aDecimal.minus(bDecimal).abs();
-  
   return difference.toNumber() < tolerance;
 }
 
 /**
- * Checks if a transaction is balanced (debits equal credits)
- * with tolerance for small rounding differences.
- * 
- * @param lines Array of transaction lines with amount and isDebit properties
- * @param tolerance Maximum allowed difference (default: 0.01)
- * @returns True if the transaction is balanced
+ * Checks if a transaction's lines are balanced (total debits equal total credits).
+ * Uses MojoDecimal for calculations and allows for a small tolerance.
+ *
+ * @param lines Array of transaction lines. Each line must have 'amount' and 'isDebit'.
+ * @param tolerance Maximum allowed difference between total debits and credits.
+ * @returns True if the transaction is balanced within the tolerance.
  */
 export function isTransactionBalanced(
   lines: Array<{ amount: string | number; isDebit: boolean }>,
-  tolerance: number = 0.01
+  tolerance: number = 0.000001
 ): boolean {
+  if (!lines || lines.length < 2) {
+    return lines.length === 0;
+  }
+
   let totalDebits = newMojoDecimal(0);
   let totalCredits = newMojoDecimal(0);
-  
+
   for (const line of lines) {
     const amount = toMojoDecimal(line.amount);
     if (line.isDebit) {
@@ -94,20 +103,34 @@ export function isTransactionBalanced(
       totalCredits = totalCredits.plus(amount);
     }
   }
-  
+
   const difference = totalDebits.minus(totalCredits).abs();
   return difference.toNumber() < tolerance;
 }
 
 /**
- * Normalizes a dollar amount string to a standard format
- * (removes currency symbols, commas, etc.)
- * 
- * @param amountStr String representing a dollar amount (e.g., "$1,234.56")
- * @returns Normalized number string (e.g., "1234.56")
+ * Normalizes a currency amount string by removing common currency symbols and group separators.
+ * Leaves the decimal separator and negative sign intact.
+ *
+ * @param amountStr String representing a monetary amount or numeric value.
+ * @returns A cleaned numeric string suitable for parsing.
  */
-export function normalizeAmountString(amountStr: string): string {
-  // Remove currency symbols, commas, and other non-numeric characters
-  // except for decimal point and negative sign
-  return amountStr.replace(/[^0-9.-]/g, '');
+export function normalizeAmountString(
+  amountStr: string | number | null | undefined
+): string {
+  if (typeof amountStr === 'number') {
+    return amountStr.toString();
+  }
+  if (typeof amountStr !== 'string' || !amountStr.trim()) {
+    return "0";
+  }
+  let normalized = amountStr.replace(/[$\s€£¥]/g, '');
+  normalized = normalized.replace(/,/g, '');
+  const negativeSign = normalized.startsWith('-') ? '-' : '';
+  normalized = normalized.replace(/-/g, '');
+  normalized = negativeSign + normalized;
+  if (!/^-?\d*(\.\d+)?$/.test(normalized) && normalized !== "") {
+    console.warn(`normalizeAmountString produced potentially invalid numeric string: "${normalized}" from input "${amountStr}"`);
+  }
+  return normalized || "0";
 }

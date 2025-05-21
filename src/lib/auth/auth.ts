@@ -13,18 +13,19 @@ import {
   resetPasswordConfirmSchema,
   changePasswordSchema,
   updateProfileSchema,
-  type RegisterUserInput,
-  type LoginInput,
-  type UpdateProfileInput,
-  type ChangePasswordInput,
-  type ResetPasswordConfirmInput,
-  type ResetPasswordRequestInput
+  // Unused type imports removed:
+  // type RegisterUserInput,
+  // type LoginInput,
+  // type UpdateProfileInput,
+  // type ChangePasswordInput,
+  // type ResetPasswordConfirmInput,
+  // type ResetPasswordRequestInput
 } from '../validation/schemas/auth';
 import { createSession, deleteSession, getSession, extendSession } from './session';
-import type { User, Session } from '@/types/auth';
-import * as d1Helpers from '../cloudflare/d1';
-import type { CloudflareEnv } from '@/env';
-import { hashPassword as argon2Hash, verifyPassword as argon2Verify } from '@/lib/auth/passwordUtils';
+import type { User, Session } from '@/types/auth'; // Assuming types/auth.d.ts is at src/types/auth.d.ts
+import * as d1Helpers from '../cloudflare/d1'; // Assuming this utility module exists
+import type { CloudflareEnv } from '@/env'; // Assuming env.d.ts is at src/env.d.ts
+import { hashPassword as argon2Hash, verifyPassword as argon2Verify } from './passwordUtils'; // Corrected path
 
 // Interface for the raw user record from the database
 interface DbUserRecord {
@@ -32,10 +33,10 @@ interface DbUserRecord {
   email: string;
   name: string | null;
   password_hash: string;
-  role: string;
-  created_at: number;
-  updated_at: number;
-  verified_at: number | null;
+  role: string; // Should align with UserRole type
+  created_at: number; // Unix timestamp (seconds)
+  updated_at: number; // Unix timestamp (seconds)
+  email_verified_at: number | null; // Renamed from verified_at to match User type
   image_url: string | null;
 }
 
@@ -47,42 +48,24 @@ export function generateToken(length = 32): string {
 }
 
 /**
- * Hashes a password using Argon2id.
+ * Hashes a password using the utility from passwordUtils.
  * @param password The plaintext password to hash.
  * @returns A promise that resolves to the hashed password string.
  */
 export async function hashPassword(password: string): Promise<string> {
-  if (!password) {
-    throw new Error("Password cannot be empty.");
-  }
-  
-  try {
-    // Use the Argon2id implementation from passwordUtils.ts
-    return await argon2Hash(password);
-  } catch (error) {
-    console.error('Error hashing password:', error);
-    throw new Error('Password hashing failed. Please try again later.');
-  }
+  // passwordUtils.hashPassword already checks for empty password
+  return argon2Hash(password);
 }
 
 /**
- * Verifies a plaintext password against a stored hash.
+ * Verifies a plaintext password against a stored hash using the utility from passwordUtils.
  * @param password The plaintext password to verify.
  * @param storedHash The hash stored in the database.
  * @returns A promise that resolves to true if the password matches, false otherwise.
  */
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  if (!storedHash || !password) {
-    return false;
-  }
-  
-  try {
-    // Use the Argon2id verification from passwordUtils.ts
-    return await argon2Verify(storedHash, password);
-  } catch (error) {
-    // Any error means verification failed
-    return false;
-  }
+  // passwordUtils.verifyPassword already checks for empty inputs
+  return argon2Verify(storedHash, password);
 }
 
 export async function registerUser(
@@ -90,7 +73,6 @@ export async function registerUser(
   userData: unknown
 ): Promise<{ success: boolean; user?: User; error?: string; errors?: z.ZodIssue[] }> {
   try {
-    // Validate input using Zod schema
     const validationResult = registerUserSchema.safeParse(userData);
     if (!validationResult.success) {
       return { success: false, error: "Validation failed", errors: validationResult.error.errors };
@@ -112,40 +94,40 @@ export async function registerUser(
     const userId = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000);
 
-    const userToInsert: Omit<DbUserRecord, 'password_hash'> & { password_hash: string } = {
+    const userToInsert: DbUserRecord = { // Use DbUserRecord for insertion
       id: userId,
       email: validatedData.email.toLowerCase(),
       name: validatedData.name,
       password_hash: passwordHash,
-      role: 'user', // Default role
+      role: 'user',
       created_at: now,
       updated_at: now,
-      verified_at: null, // Email not verified initially
+      email_verified_at: null, // Email not verified initially
       image_url: null,
     };
 
     await d1Helpers.insert(db, 'users', userToInsert);
 
-    // Create a verification token (optional, if you implement email verification)
-    const verificationToken = generateToken();
+    const verificationTokenValue = generateToken(); // Renamed variable
     await d1Helpers.insert(db, 'verification_tokens', {
       identifier: validatedData.email.toLowerCase(),
-      token: verificationToken,
-      expires_at: now + (24 * 60 * 60), // Expires in 24 hours
+      token: verificationTokenValue, // Use new variable name
+      expires_at: now + (24 * 60 * 60),
       created_at: now,
+      type: 'EMAIL_VERIFICATION', // Added type
     });
-    
-    // TODO: Send verification email with the token
-    console.log(`TODO: Send verification email to ${validatedData.email} with token: ${verificationToken}`);
+
+    console.log(`TODO: Send verification email to ${validatedData.email} with token: ${verificationTokenValue}`);
 
     const registeredUser: User = {
       id: userId,
       email: userToInsert.email,
       name: userToInsert.name ?? undefined,
-      role: userToInsert.role as User['role'],
+      role: userToInsert.role as User['role'], // Cast if UserRole is more specific
       createdAt: userToInsert.created_at,
       updatedAt: userToInsert.updated_at,
-      // verifiedAt will be undefined until verified
+      emailVerifiedAt: userToInsert.email_verified_at ?? undefined, // FIXED: Use emailVerifiedAt
+      imageUrl: userToInsert.image_url ?? undefined,
     };
 
     return { success: true, user: registeredUser };
@@ -173,7 +155,7 @@ export async function loginUser(
     if (!db) throw new Error("DATABASE binding not found in environment.");
 
     const userRecord = await db.prepare(
-      'SELECT id, email, name, password_hash, role, created_at, updated_at, verified_at, image_url FROM users WHERE email = ?'
+      'SELECT id, email, name, password_hash, role, created_at, updated_at, email_verified_at, image_url FROM users WHERE email = ?'
     ).bind(validatedData.email.toLowerCase()).first<DbUserRecord>();
 
     if (!userRecord || !userRecord.password_hash) {
@@ -182,31 +164,22 @@ export async function loginUser(
 
     const passwordMatches = await verifyPassword(validatedData.password, userRecord.password_hash);
     if (!passwordMatches) {
-      // Log failed login attempt if you want to implement rate limiting
       try {
         await d1Helpers.insert(db, 'activity_logs', {
-          user_id: userRecord.id,
-          action: 'login_failed',
-          created_at: Math.floor(Date.now() / 1000),
+          user_id: userRecord.id, action: 'login_failed', created_at: Math.floor(Date.now() / 1000),
         });
-      } catch (logError) {
-        console.error("Failed to log failed login attempt:", logError);
-      }
-      
+      } catch (logError) { console.error("Failed to log failed login attempt:", logError); }
       return { success: false, error: 'Invalid email or password' };
     }
 
-    // Optional: Check if email is verified if your system requires it for login
-    // if (!userRecord.verified_at) {
+    // if (!userRecord.email_verified_at) { // Use email_verified_at
     //   return { success: false, error: 'Please verify your email before logging in.' };
     // }
 
-    // Create a session
-    const expiresInSeconds = validatedData.rememberMe ? (30 * 24 * 60 * 60) : (24 * 60 * 60); // 30 days or 1 day
-    const session = await createSession(env, userRecord.id, expiresInSeconds, { 
-      // Include any additional session data you want to store
-      ip: /* get IP if possible */ undefined,
-      userAgent: /* get UA if possible */ undefined 
+    const expiresInSeconds = validatedData.rememberMe ? (30 * 24 * 60 * 60) : (24 * 60 * 60);
+    const session = await createSession(env, userRecord.id, expiresInSeconds, {
+      ip: /* context.request.headers.get('CF-Connecting-IP') */ undefined,
+      userAgent: /* context.request.headers.get('User-Agent') */ undefined
     });
 
     const userToReturn: User = {
@@ -216,22 +189,15 @@ export async function loginUser(
       role: userRecord.role as User['role'],
       createdAt: userRecord.created_at,
       updatedAt: userRecord.updated_at,
-      verifiedAt: userRecord.verified_at ?? undefined,
+      emailVerifiedAt: userRecord.email_verified_at ?? undefined, // FIXED: Use emailVerifiedAt
       imageUrl: userRecord.image_url ?? undefined,
     };
-    
-    // Log successful login activity
+
     try {
         await d1Helpers.insert(db, 'activity_logs', {
-          user_id: userRecord.id,
-          action: 'login_success',
-          // ip_address: request?.headers?.get('CF-Connecting-IP'),
-          // user_agent: request?.headers?.get('User-Agent'),
-          created_at: Math.floor(Date.now() / 1000),
+          user_id: userRecord.id, action: 'login_success', created_at: Math.floor(Date.now() / 1000),
         });
-    } catch (logError) {
-        console.error("Failed to log login activity:", logError);
-    }
+    } catch (logError) { console.error("Failed to log login activity:", logError); }
 
     return { success: true, user: userToReturn, sessionId: session.id };
   } catch (error) {
@@ -246,15 +212,13 @@ export async function loginUser(
 export async function logoutUser(
   env: CloudflareEnv,
   sessionId: string,
-  userId?: string
+  userId?: string // Optional userId for logging
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await deleteSession(env, sessionId);
+    await deleteSession(env, sessionId); // deleteSession handles KV interaction
     if (userId && env.DATABASE) {
       await d1Helpers.insert(env.DATABASE, 'activity_logs', {
-        user_id: userId, 
-        action: 'logout', 
-        created_at: Math.floor(Date.now() / 1000),
+        user_id: userId, action: 'logout', created_at: Math.floor(Date.now() / 1000),
       });
     }
     return { success: true };
@@ -268,7 +232,7 @@ export async function getUserBySessionId(
   env: CloudflareEnv,
   sessionId: string
 ): Promise<User | null> {
-  const session = await getSession(env, sessionId);
+  const session = await getSession(env, sessionId); // getSession handles KV interaction
   if (session?.userId && env.DATABASE) {
     const dbUser = await d1Helpers.getById<DbUserRecord>(env.DATABASE, 'users', session.userId);
     if (dbUser) {
@@ -279,7 +243,7 @@ export async function getUserBySessionId(
         role: dbUser.role as User['role'],
         createdAt: dbUser.created_at,
         updatedAt: dbUser.updated_at,
-        verifiedAt: dbUser.verified_at ?? undefined,
+        emailVerifiedAt: dbUser.email_verified_at ?? undefined, // FIXED: Use emailVerifiedAt
         imageUrl: dbUser.image_url ?? undefined,
       };
     }
@@ -297,7 +261,7 @@ export async function verifyEmailToken(
     const now = Math.floor(Date.now() / 1000);
 
     const tokenRecord = await db.prepare(
-      'SELECT identifier FROM verification_tokens WHERE token = ? AND expires_at > ?'
+      "SELECT identifier FROM verification_tokens WHERE token = ? AND expires_at > ? AND type = 'EMAIL_VERIFICATION'" // Added type
     ).bind(token, now).first<{ identifier: string }>();
 
     if (!tokenRecord) {
@@ -305,26 +269,26 @@ export async function verifyEmailToken(
     }
 
     const userUpdateResult = await db.prepare(
-      'UPDATE users SET verified_at = ?, updated_at = ? WHERE email = ? AND verified_at IS NULL'
+      'UPDATE users SET email_verified_at = ?, updated_at = ? WHERE email = ? AND email_verified_at IS NULL' // Use email_verified_at
     ).bind(now, now, tokenRecord.identifier).run();
 
+    // Check if any rows were actually updated
     if (!userUpdateResult.meta.changes || userUpdateResult.meta.changes === 0) {
-      const userCheck = await db.prepare('SELECT verified_at FROM users WHERE email = ?').bind(tokenRecord.identifier).first<{verified_at: number | null}>();
-      if (userCheck?.verified_at) {
-        await db.prepare('DELETE FROM verification_tokens WHERE token = ?').bind(token).run();
-        return { success: true, email: tokenRecord.identifier };
+      // If no changes, check if user was already verified
+      const userCheck = await db.prepare('SELECT email_verified_at FROM users WHERE email = ?').bind(tokenRecord.identifier).first<{email_verified_at: number | null}>();
+      if (userCheck?.email_verified_at) { // User already verified
+        await db.prepare("DELETE FROM verification_tokens WHERE token = ? AND type = 'EMAIL_VERIFICATION'").bind(token).run(); // Delete used/checked token
+        return { success: true, email: tokenRecord.identifier }; // Still success
       }
-      return { success: false, error: 'Failed to verify email. User may already be verified or not found.' };
+      return { success: false, error: 'Failed to verify email. User may not exist or already verified with no change.' };
     }
-    
-    await db.prepare('DELETE FROM verification_tokens WHERE token = ?').bind(token).run();
-    
+
+    await db.prepare("DELETE FROM verification_tokens WHERE token = ? AND type = 'EMAIL_VERIFICATION'").bind(token).run(); // Delete used token
+
     const user = await db.prepare('SELECT id FROM users WHERE email = ?').bind(tokenRecord.identifier).first<{id: string}>();
     if (user) {
       await d1Helpers.insert(db, 'activity_logs', {
-        user_id: user.id, 
-        action: 'email_verified', 
-        created_at: now,
+        user_id: user.id, action: 'email_verified', created_at: now,
       });
     }
     return { success: true, email: tokenRecord.identifier };
@@ -347,43 +311,21 @@ export async function requestPasswordReset(
     const db = env.DATABASE;
     if (!db) throw new Error("DATABASE binding not found in environment.");
 
-    // Important: This is a potential information disclosure vulnerability if our response time differs
-    // depending on whether the email exists or not. To mitigate, we always return success
-    // regardless of whether the email exists, and we also ensure our code execution time
-    // is reasonably consistent.
-    
     const user = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email.toLowerCase()).first<{ id: string }>();
     const now = Math.floor(Date.now() / 1000);
-    
-    if (user) {
-      const token = generateToken();
-      
-      // Set token to expire in 1 hour
-      await d1Helpers.insert(db, 'verification_tokens', {
-        identifier: email.toLowerCase(), 
-        token: token, 
-        expires_at: now + (60 * 60), 
-        created_at: now,
-      });
 
-      // TODO: Send actual password reset email
-      console.log(`TODO: Send password reset email to ${email} with token: ${token}`);
-      
-      await d1Helpers.insert(db, 'activity_logs', { 
-        user_id: user.id, 
-        action: 'password_reset_requested', 
-        created_at: now 
+    if (user) {
+      const tokenValue = generateToken(); // Renamed variable
+      await d1Helpers.insert(db, 'verification_tokens', {
+        identifier: email.toLowerCase(), token: tokenValue, expires_at: now + (60 * 60), created_at: now, type: 'PASSWORD_RESET', // Added type
       });
+      console.log(`TODO: Send password reset email to ${email} with token: ${tokenValue}`);
+      await d1Helpers.insert(db, 'activity_logs', { user_id: user.id, action: 'password_reset_requested', created_at: now });
     } else {
-      // Log attempt on non-existent account for security monitoring
       console.log(`Password reset requested for non-existent email: ${email}`);
-      
-      // Simulate processing time to avoid timing attacks
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 200 + 50)); // Simulate delay
     }
-    
-    // Always return success regardless of whether email exists
-    return { success: true };
+    return { success: true }; // Always return success
   } catch (error) {
      if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0]?.message || 'Invalid email', errors: error.errors };
@@ -408,40 +350,23 @@ export async function resetPasswordWithToken(
     const now = Math.floor(Date.now() / 1000);
 
     const tokenRecord = await db.prepare(
-      'SELECT identifier FROM verification_tokens WHERE token = ? AND expires_at > ?'
+      "SELECT identifier FROM verification_tokens WHERE token = ? AND expires_at > ? AND type = 'PASSWORD_RESET'" // Added type
     ).bind(token, now).first<{ identifier: string }>();
 
-    if (!tokenRecord) {
-      return { success: false, error: 'Invalid or expired password reset token.' };
-    }
+    if (!tokenRecord) { return { success: false, error: 'Invalid or expired password reset token.' }; }
 
     const user = await db.prepare('SELECT id FROM users WHERE email = ?').bind(tokenRecord.identifier).first<{ id: string }>();
     if (!user) { return { success: false, error: 'User associated with token not found.' }; }
 
     const passwordHash = await hashPassword(password);
-
-    // Update the password
-    await db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
-      .bind(passwordHash, now, user.id).run();
-      
-    // Delete the token so it can't be reused
-    await db.prepare('DELETE FROM verification_tokens WHERE token = ?').bind(token).run();
-    
-    // Log the password reset activity
-    await d1Helpers.insert(db, 'activity_logs', { 
-      user_id: user.id, 
-      action: 'password_reset_completed', 
-      created_at: now 
-    });
-    
-    // Also invalidate all existing sessions for this user for security
-    await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
-    
+    await db.prepare('UPDATE users SET password_hash = ?, updated_at = ?, email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?') // Also verify email if not already
+      .bind(passwordHash, now, now, user.id).run(); // If email_verified_at is null, set it to now
+    await db.prepare("DELETE FROM verification_tokens WHERE token = ? AND type = 'PASSWORD_RESET'").bind(token).run(); // Delete used token
+    await d1Helpers.insert(db, 'activity_logs', { user_id: user.id, action: 'password_reset_completed', created_at: now });
+    await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run(); // Invalidate all sessions
     return { success: true };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0]?.message || 'Invalid data', errors: error.errors };
-    }
+    if (error instanceof z.ZodError) { return { success: false, error: error.errors[0]?.message || 'Invalid data', errors: error.errors }; }
     console.error('Error resetting password:', error);
     return { success: false, error: 'An unexpected error occurred.' };
   }
@@ -463,6 +388,8 @@ export async function changePassword(
 
     const userRecord = await db.prepare('SELECT password_hash FROM users WHERE id = ?').bind(userId).first<{ password_hash: string }>();
     if (!userRecord) { return { success: false, error: 'User not found.' }; }
+    if (!userRecord.password_hash) { return { success: false, error: 'Cannot change password, user may use OAuth.' }; }
+
 
     if (!await verifyPassword(currentPassword, userRecord.password_hash)) {
       return { success: false, error: 'Incorrect current password.' };
@@ -470,25 +397,11 @@ export async function changePassword(
 
     const newPasswordHash = await hashPassword(newPassword);
     const now = Math.floor(Date.now() / 1000);
-    
-    await db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
-      .bind(newPasswordHash, now, userId).run();
-    
-    // Log the password change activity
-    await d1Helpers.insert(db, 'activity_logs', { 
-      user_id: userId, 
-      action: 'password_changed', 
-      created_at: now 
-    });
-    
-    // Optionally invalidate all other sessions for security
-    // await db.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(userId, currentSessionId).run();
-    
+    await db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').bind(newPasswordHash, now, userId).run();
+    await d1Helpers.insert(db, 'activity_logs', { user_id: userId, action: 'password_changed', created_at: now });
     return { success: true };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0]?.message || 'Invalid data', errors: error.errors };
-    }
+    if (error instanceof z.ZodError) { return { success: false, error: error.errors[0]?.message || 'Invalid data', errors: error.errors }; }
     console.error('Error changing password:', error);
     return { success: false, error: 'An unexpected error occurred.' };
   }
@@ -509,7 +422,7 @@ export async function updateProfile(
     if (Object.keys(validatedData).length === 0) {
       return { success: false, error: 'No information provided for update.' };
     }
-    
+
     const db = env.DATABASE;
     if (!db) throw new Error("DATABASE binding not found in environment.");
     const now = Math.floor(Date.now() / 1000);
@@ -523,36 +436,34 @@ export async function updateProfile(
     if (validatedData.name !== undefined && validatedData.name !== currentUser.name) {
       updates.name = validatedData.name;
     }
+    if (validatedData.imageUrl !== undefined && validatedData.imageUrl !== currentUser.image_url) {
+        updates.image_url = validatedData.imageUrl;
+    }
 
-    if (validatedData.email !== undefined && validatedData.email.toLowerCase() !== currentUser.email) {
+    if (validatedData.email && validatedData.email.toLowerCase() !== currentUser.email) {
       newEmailAddress = validatedData.email.toLowerCase();
       const existingUser = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').bind(newEmailAddress, userId).first<{ id: string }>();
-      if (existingUser) {
-        return { success: false, error: 'This email address is already in use.' };
-      }
+      if (existingUser) { return { success: false, error: 'This email address is already in use.' }; }
       updates.email = newEmailAddress;
-      updates.verified_at = null;
+      updates.email_verified_at = null; // Email changed, needs re-verification
       newEmailVerificationNeeded = true;
     }
 
-    if (Object.keys(updates).length > 1) {
+    if (Object.keys(updates).length > 1) { // updated_at is always there
       await d1Helpers.update(db, 'users', userId, updates);
     }
 
     if (newEmailVerificationNeeded && newEmailAddress) {
-      const verificationToken = generateToken();
+      const verificationTokenValue = generateToken();
       await d1Helpers.insert(db, 'verification_tokens', {
-        identifier: newEmailAddress, 
-        token: verificationToken, 
-        expires_at: now + (24 * 60 * 60), 
-        created_at: now,
+        identifier: newEmailAddress, token: verificationTokenValue, expires_at: now + (24 * 60 * 60), created_at: now, type: 'EMAIL_VERIFICATION',
       });
-      console.log(`TODO: Send verification email to new address ${newEmailAddress} with token: ${verificationToken}`);
+      console.log(`TODO: Send verification email to new address ${newEmailAddress} with token: ${verificationTokenValue}`);
     }
-    
+
     const updatedDbUserRecord = await d1Helpers.getById<DbUserRecord>(db, 'users', userId);
     if (!updatedDbUserRecord) { return {success: false, error: "Failed to fetch updated user profile."}; }
-    
+
     const userToReturn: User = {
       id: updatedDbUserRecord.id,
       email: updatedDbUserRecord.email,
@@ -560,21 +471,14 @@ export async function updateProfile(
       role: updatedDbUserRecord.role as User['role'],
       createdAt: updatedDbUserRecord.created_at,
       updatedAt: updatedDbUserRecord.updated_at,
-      verifiedAt: updatedDbUserRecord.verified_at ?? undefined,
+      emailVerifiedAt: updatedDbUserRecord.email_verified_at ?? undefined, // FIXED: Use emailVerifiedAt
       imageUrl: updatedDbUserRecord.image_url ?? undefined,
     };
 
-    await d1Helpers.insert(db, 'activity_logs', { 
-      user_id: userId, 
-      action: 'profile_updated', 
-      created_at: now 
-    });
-    
+    await d1Helpers.insert(db, 'activity_logs', { user_id: userId, action: 'profile_updated', created_at: now });
     return { success: true, user: userToReturn };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0]?.message || 'Invalid data', errors: error.errors };
-    }
+    if (error instanceof z.ZodError) { return { success: false, error: error.errors[0]?.message || 'Invalid data', errors: error.errors }; }
     console.error('Error updating profile:', error);
     return { success: false, error: 'An unexpected error occurred.' };
   }
@@ -587,6 +491,7 @@ export async function getUserById(
   try {
     const db = env.DATABASE;
     if (!db) throw new Error("DATABASE binding not found in environment.");
+
     const dbUser = await d1Helpers.getById<DbUserRecord>(db, 'users', userId);
     if (dbUser) {
       return {
@@ -596,13 +501,13 @@ export async function getUserById(
         role: dbUser.role as User['role'],
         createdAt: dbUser.created_at,
         updatedAt: dbUser.updated_at,
-        verifiedAt: dbUser.verified_at ?? undefined,
+        emailVerifiedAt: dbUser.email_verified_at ?? undefined, // FIXED: Use emailVerifiedAt
         imageUrl: dbUser.image_url ?? undefined,
       };
     }
     return null;
   } catch (error) {
-    console.error('Error getting user by ID:', error);
+    console.error(`Error getting user by ID (${userId}):`, error);
     return null;
   }
 }
@@ -612,5 +517,6 @@ export async function extendUserSession(
   sessionId: string,
   newExpiresInSeconds?: number
 ): Promise<Session | null> {
+    // This now directly calls extendSession from session.ts
     return extendSession(env, sessionId, newExpiresInSeconds);
 }

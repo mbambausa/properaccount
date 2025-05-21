@@ -1,63 +1,49 @@
 // src/utils/csrf.ts
-import { doubleCsrf } from 'csrf-csrf'; // Ensure 'csrf-csrf' is installed
+import { doubleCsrf } from 'csrf-csrf';
 import type { APIContext } from 'astro';
-// Correctly import CloudflareEnv from your env.d.ts file
-// The path '../env.d' assumes csrf.ts is in src/utils/ and env.d.ts is in src/
-import type { CloudflareEnv } from '../env.d';
+import type { CloudflareEnv } from '../env'; // Assumes csrf.ts is in src/utils/
 
 // Define the shape of CSRF utilities returned by doubleCsrf
-type CsrfUtils = {
-  generateToken: (
-    req: Request,
-    res: Response, // A Response object that will have 'Set-Cookie' header added
-    overwrite?: boolean // CORRECTED: The third param is 'overwrite' (boolean), not an options object
-  ) => string; // Returns the CSRF token string
-  validateRequest: (req: Request, res: Response) => boolean; // Validates token from request
-};
+type CsrfLibraryUtils = ReturnType<typeof doubleCsrf>;
 
-// Singleton instance for CSRF utilities to avoid re-initialization on every call.
-let csrfUtilsInstance: CsrfUtils | null = null;
+// Singleton instance for CSRF utilities
+let csrfUtilsInstance: CsrfLibraryUtils | null = null;
+
+const DEFAULT_CSRF_FALLBACK_SECRET =
+  'unsafe-fallback-dev-secret-must-be-at-least-32-bytes-long-for-csrf';
 
 /**
- * Initializes and returns CSRF utility functions.
- * It uses a singleton pattern to ensure csrf-csrf is configured only once.
+ * Initializes and returns CSRF utility functions using a singleton pattern.
  * @param env - The runtime environment containing secrets and configurations.
- * @returns An object with `generateToken` and `validateRequest` functions.
+ * @returns An object with CSRF utility functions.
  */
-function getCsrfUtils(env: CloudflareEnv): CsrfUtils {
+function getCsrfUtils(env: CloudflareEnv): CsrfLibraryUtils {
   if (csrfUtilsInstance) {
     return csrfUtilsInstance;
   }
 
-  const secret =
-    env.CSRF_SECRET && env.CSRF_SECRET.length >= 32
-      ? env.CSRF_SECRET
-      : (() => {
-          const fallback =
-            'unsafe-fallback-dev-secret-must-be-at-least-32-bytes-long-for-csrf';
-          if (env.ENVIRONMENT === 'development' || import.meta.env.DEV) {
-            console.warn(
-              `CSRF Setup Warning: Using fallback CSRF_SECRET. THIS IS INSECURE. Ensure CSRF_SECRET is properly set in your production environment and .dev.vars.`
-            );
-          } else {
-            console.error(
-              'CRITICAL CSRF Setup Error: CSRF_SECRET is missing or too short in a production-like environment.'
-            );
-            // Consider throwing an error in production to prevent insecure operation
-            // throw new Error("CSRF_SECRET is not securely configured for production.");
-          }
-          return fallback;
-        })();
+  let secret = env.CSRF_SECRET;
 
-  // Destructure the functions returned by doubleCsrf.
-  // The generateToken function from the library is directly used.
-  const csrfUtilities = doubleCsrf({
+  if (!secret || secret.length < 32) {
+    secret = DEFAULT_CSRF_FALLBACK_SECRET;
+    if (env.ENVIRONMENT === 'production' || !import.meta.env.DEV) {
+      console.error(
+        'CRITICAL CSRF Setup Error: CSRF_SECRET is missing or too short in a production-like environment. Using an insecure fallback.'
+      );
+    } else {
+      console.warn(
+        `CSRF Setup Warning: Using fallback CSRF_SECRET. THIS IS INSECURE. Ensure CSRF_SECRET is properly set for development in .dev.vars and for production in Cloudflare secrets.`
+      );
+    }
+  }
+
+  const csrfLibUtils = doubleCsrf({
     getSecret: () => secret,
     getSessionIdentifier: (req: Request): string => {
       const isProdLike = env.ENVIRONMENT === 'production';
       const sessionCookieName = isProdLike
-        ? "__Secure-authjs.session-token" // Standard for Auth.js in prod
-        : "authjs.session-token"; // Standard for Auth.js in dev
+        ? "__Secure-authjs.session-token"
+        : "authjs.session-token";
 
       const cookiesHeader = req.headers.get('cookie');
       if (cookiesHeader) {
@@ -65,148 +51,107 @@ function getCsrfUtils(env: CloudflareEnv): CsrfUtils {
         const sessionCookie = cookies.find(c => c.startsWith(`${sessionCookieName}=`));
         if (sessionCookie) {
           const sessionTokenValue = sessionCookie.split('=')[1];
-          if (sessionTokenValue) {
+          if (sessionTokenValue && sessionTokenValue.length > 10) {
             return sessionTokenValue;
           }
         }
       }
-      return "__csrf_no_session__"; // Fallback identifier
+      return "__anonymous_csrf_session__";
     },
-    cookieName: '__Host-csrf-secret', // Recommended prefix for security
+    cookieName: env.ENVIRONMENT === 'production' ? '__Host-csrf.secret' : 'csrf.secret',
     cookieOptions: {
       path: '/',
-      secure: import.meta.env.PROD, // True if in production build
+      secure: env.ENVIRONMENT === 'production',
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 2, // 2 hours
+      maxAge: 60 * 60 * 2, // 2 hours in seconds
     },
-    size: 32, // Token size in bytes
+    size: 64,
   });
 
-  csrfUtilsInstance = csrfUtilities; // Assign the directly returned object
+  csrfUtilsInstance = csrfLibUtils;
   return csrfUtilsInstance;
 }
 
-/**
- * Prepares CSRF protection for a request by generating a CSRF token
- * and setting the CSRF secret cookie via Astro's context.
- * This function should be called on pages that render forms requiring CSRF protection.
- * @param context - The Astro APIContext.
- * @returns A promise that resolves to the generated CSRF token.
- */
-export async function prepareCsrf(context: APIContext): Promise<string> {
-  // Accessing env through App.Locals.runtime which should be augmented by src/env.d.ts
+export async function prepareCsrfToken(context: APIContext): Promise<string> {
   const env = context.locals.runtime?.env as CloudflareEnv | undefined;
 
   if (!env) {
-    console.error('CSRF Prep: CloudflareEnv missing from context.locals.runtime. Cannot prepare CSRF token.');
-    if (import.meta.env.DEV) return 'dev-csrf-token-env-missing'; // Fallback for dev
+    const errorMessage = 'CSRF Prep: CloudflareEnv missing from context.locals.runtime. Cannot prepare CSRF token.';
+    console.error(errorMessage);
+    if (import.meta.env.DEV) return 'dev-csrf-token-env-missing';
     throw new Error('Server configuration error: Runtime environment not found for CSRF preparation.');
   }
 
   const { generateToken } = getCsrfUtils(env);
-  const dummyRes = new Response(); // csrf-csrf's generateToken needs a Response to set cookies on
+  const dummyResponse = new Response(null);
 
   try {
-    // Call 'generateToken' with 'overwrite' as a boolean (true to overwrite existing secret cookie)
-    const token = generateToken(context.request as Request, dummyRes, true);
+    const csrfToken = generateToken(context.request, dummyResponse, true);
+    const setCookieHeader = dummyResponse.headers.get('set-cookie');
 
-    const setCookieHeader = dummyRes.headers.get('set-cookie');
     if (setCookieHeader) {
-      // Parse the Set-Cookie header and apply it using Astro's cookie API
-      const parts = setCookieHeader.split(';').map(part => part.trim());
-      const nameValuePair = parts[0].split('=');
-      const cookieName = nameValuePair[0];
-      let cookieValue = nameValuePair[1] || ''; // Get the raw cookie value first
-
-      // Note: csrf-csrf library typically generates Base64 (URL safe) tokens/secrets for cookies.
-      // These are generally safe for cookie values without further URI encoding/decoding.
-      // The decodeURIComponent step below might be unnecessary or could corrupt the secret
-      // if it's not actually percent-encoded. Verify if this is needed.
-      try {
-        // Attempt to decode only if it seems URI encoded (e.g., contains '%')
-        if (cookieValue.includes('%')) {
-            cookieValue = decodeURIComponent(cookieValue);
-        }
-      } catch (e) {
-        // If decoding fails (e.g., malformed or not actually encoded), use the raw value.
-        // This log helps identify if non-encoded values are causing issues.
-        console.warn(`CSRF Prep: Cookie value decoding failed for '${nameValuePair[1]}', using raw value. Error: ${e}`);
-        // cookieValue remains as nameValuePair[1]
-      }
-
+      const cookieParts = setCookieHeader.split(';').map(part => part.trim());
+      const [nameValue, ...optionsArray] = cookieParts;
+      const [cookieName, cookieValue] = nameValue.split('=');
       const astroCookieOptions: Record<string, any> = {
         httpOnly: true,
-        secure: import.meta.env.PROD,
+        secure: env.ENVIRONMENT === 'production',
         path: '/',
-        sameSite: 'lax'
+        sameSite: 'lax',
       };
-
-      // Parse options like Max-Age from the Set-Cookie header
-      parts.slice(1).forEach(part => {
+      optionsArray.forEach(part => {
         const [key, ...valParts] = part.split('=');
         const value = valParts.join('=');
-        if (key.toLowerCase() === 'max-age') {
+        if (key.toLowerCase() === 'max-age' && value) {
           astroCookieOptions.maxAge = parseInt(value, 10);
         }
-        // Astro's cookies.set uses 'expires' (Date object) if you want to set an expiry date.
-        // Max-Age is directly supported by Astro's cookies.set.
+        if (key.toLowerCase() === 'expires' && value) {
+           astroCookieOptions.expires = new Date(value);
+        }
       });
-
-      // Ensure maxAge is set if not parsed from header, matching csrf-csrf config
-      if (astroCookieOptions.maxAge === undefined) {
-        astroCookieOptions.maxAge = 60 * 60 * 2; // Default to 2 hours
+      if (astroCookieOptions.maxAge === undefined && astroCookieOptions.expires === undefined) {
+        astroCookieOptions.maxAge = 60 * 60 * 2;
       }
-
       context.cookies.set(cookieName, cookieValue, astroCookieOptions);
     } else {
-      console.warn("CSRF Prep: 'set-cookie' header was not generated by csrf-csrf library. This is unexpected.");
+      console.warn("CSRF Prep: 'set-cookie' header for CSRF secret was not generated by csrf-csrf library.");
     }
-
-    return token; // This is the CSRF token to embed in forms
+    return csrfToken;
   } catch (error) {
     console.error('CSRF token generation error:', error);
     if (import.meta.env.DEV) {
-      // Fallback token for development to allow page rendering
-      return 'csrf-dev-token-generation-error-' + Math.random().toString(36).substring(2, 15);
+      return 'dev-csrf-token-error-' + Math.random().toString(36).substring(2, 9);
     }
-    throw new Error('Failed to generate CSRF token due to an internal error.');
+    throw new Error('Failed to generate CSRF token.');
   }
 }
 
-/**
- * Validates the CSRF token for an incoming request.
- * This should be called in API endpoints that handle state-changing operations (POST, PUT, DELETE).
- * @param context - The Astro APIContext.
- * @returns A promise that resolves to true if the CSRF token is valid, false otherwise.
- */
-export async function validateRequestCsrf(context: APIContext): Promise<boolean> {
-  // Accessing env through App.Locals.runtime
-  const env = context.locals.runtime?.env as CloudflareEnv | undefined;
+export async function validateCsrfRequest(
+  contextOrRequest: APIContext | Request,
+  envOverride?: CloudflareEnv
+): Promise<boolean> {
+  const request = (contextOrRequest as APIContext).request || (contextOrRequest as Request);
+  const env = envOverride || (contextOrRequest as APIContext).locals?.runtime?.env as CloudflareEnv | undefined;
 
   if (!env) {
-    console.error('CSRF Valid: CloudflareEnv missing from context.locals.runtime. CSRF validation cannot proceed.');
-    return false; // Fail closed if environment is missing
+    console.error('CSRF Valid: CloudflareEnv missing. CSRF validation cannot proceed.');
+    return false;
   }
 
   try {
     const { validateRequest } = getCsrfUtils(env);
-    const dummyRes = new Response(); // validateRequest also needs a Response object (though it doesn't modify it)
+    // FIXED: validateRequest from csrf-csrf typically only takes the request object.
+    const isValid = validateRequest(request);
 
-    const isValid = validateRequest(context.request as Request, dummyRes);
     if (!isValid) {
       console.warn(
-        `CSRF token validation failed for: ${context.request.method} ${new URL(context.request.url).pathname}`
+        `CSRF token validation failed for: ${request.method} ${new URL(request.url).pathname}`
       );
     }
     return isValid;
   } catch (error) {
-    console.error('Error during CSRF validation process:', error);
-    // Optional: Lenient mode for development if strictly needed, but generally better to fix issues.
-    if (env.ENVIRONMENT === 'development' && import.meta.env.DEV) {
-      console.warn('DEVELOPMENT MODE: CSRF validation encountered an error. Request will be rejected by default. Investigate the error.');
-      // return true; // Uncomment only if absolutely necessary for dev and the error is understood.
-    }
-    return false; // Fail closed by default on error
+    console.error('Error during CSRF validation:', error);
+    return false;
   }
 }

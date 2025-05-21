@@ -4,103 +4,75 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import type { Alpine as AlpineType } from "alpinejs";
+import type {
+  KVNamespace,
+  D1Database,
+  R2Bucket,
+  Queue,
+  CfProperties,
+  ExecutionContext,
+} from "@cloudflare/workers-types";
+import type { Session, User } from "./types/auth"; // Ensure Session and User types are imported
 
-// This interface defines the shape of your Cloudflare bindings and secrets
-// that are accessible via `Astro.locals.runtime.env` in server-side code.
+// Defines the shape of Cloudflare bindings and secrets
+// available via `Astro.locals.runtime.env`.
 export interface CloudflareEnv {
-  // Cloudflare Service Bindings
+  // Cloudflare Service Bindings (ensure these match wrangler.toml bindings)
   DATABASE: D1Database;
   CONFIG_KV: KVNamespace;
   REPORT_CACHE_KV: KVNamespace;
-  SESSION_KV: KVNamespace; // For custom session management
+  SESSION_KV: KVNamespace;       // For custom session management
   DOCUMENTS_BUCKET: R2Bucket;
-  BACKGROUND_TASKS_QUEUE: Queue; // For Phase 3+
+  BACKGROUND_TASKS_QUEUE?: Queue; // Optional until Phase 3+
 
-  // Secrets (set in Cloudflare dashboard for deployed envs, .dev.vars for local)
-  AUTH_SECRET: string;
-  CSRF_SECRET: string;
-  SESSION_SECRET: string;
-  JWT_SECRET: string;
+  // Secrets (set in Cloudflare dashboard or .dev.vars for local)
+  AUTH_SECRET: string;    // For Auth.js or similar
+  CSRF_SECRET: string;    // For CSRF protection logic
+  SESSION_SECRET: string; // For signing/encrypting custom session data
+  JWT_SECRET: string;     // For any custom JWT logic
 
   // OAuth Provider Secrets
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
 
-  // Environment identifier (e.g., 'development', 'staging', 'production')
-  ENVIRONMENT?: "development" | "production" | "staging" | string;
+  // Environment identifier
+  ENVIRONMENT: "development" | "production" | "staging" | string;
 }
 
 declare global {
   interface Window {
-    eruda?: { init: (config?: any) => void };
     Alpine?: AlpineType;
-    toggleTheme?: () => void;
-    toastSystem?: {
-      show: (
-        type: "success" | "error" | "warning" | "info",
-        message: string,
-        duration?: number
-      ) => string;
-      remove: (id: string) => void;
-    };
-    showToast?: (
-      type: "success" | "error" | "warning" | "info",
-      message: string,
-      duration?: number
-    ) => string | null;
-
-    // Add fs utility for accessing files from Mojo components
-    fs?: {
-      readFile: (
-        path: string,
-        options?: { encoding?: string }
-      ) => Promise<string | Uint8Array>;
-    };
+    // (other globals as before…)
   }
-  // Make eruda and Alpine available globally if they are loaded via <script> tags.
-  const eruda: Window["eruda"];
-  const Alpine: AlpineType;
 
-  // Moving App namespace inside global to ensure it's recognized properly
   namespace App {
     interface Locals {
       runtime: {
         env: CloudflareEnv;
-        cf?: CfProperties;
-        ctx?: ExecutionContext;
+        cf?: CfProperties;          // Cloudflare request properties
+        ctx: ExecutionContext;       // Execution context (waitUntil, passThroughOnException)
       };
-      cspNonce?: string;
-      user?: {
-        id: string;
-        email: string;
-        name?: string;
-        role: string;
-        // Add tenant-specific fields for multi-tenancy
-        currentEntityId?: string;
-        permissions?: string[];
-      };
-      sessionId?: string;
-      session?: Record<string, any>;
-      // Add CSRF token for forms
-      csrfToken?: string;
+      cspNonce?: string;            // For CSP nonces in headers/forms
+      user?: User;                  // Use imported User type
+      sessionId?: string;           // From custom session store
+      session?: Session;            // Use imported Session type
+      csrfToken?: string;           // To embed in forms
+      currentEntityId?: string;     // For tenant (multi-entity) middleware
     }
   }
 }
 
-// Define environment variables accessible via `import.meta.env`
+// Client-side environment variables (import.meta.env)
 interface ImportMetaEnv {
   readonly PUBLIC_APP_URL: string;
-  readonly PUBLIC_DEV_MODE?: string;
-  readonly NODE_ENV?: "development" | "production" | "test";
-  // Add public config flags for UnoCSS and Alpine
+  readonly PUBLIC_DEV_MODE?: string;     // "true" or "false"
+  readonly NODE_ENV: "development" | "production" | "test";
   readonly PUBLIC_ENABLE_TOASTS?: string;
   readonly PUBLIC_DEFAULT_THEME?: "light" | "dark" | "system";
 }
 
-// Augment ImportMeta to include the custom env type.
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-// This export is necessary to make the file a module.
-export {};
+export {}; // Ensure this file is treated as a module

@@ -1,5 +1,6 @@
 // src/types/api.d.ts
 import type { User } from './auth';
+import type { CloudflareEnv } from '../env'; // Import CloudflareEnv
 
 /**
  * Standard success response structure for API endpoints.
@@ -32,7 +33,8 @@ export interface ApiResponseError<D = unknown> {
 }
 
 /**
- * Common format for validation errors, mapping field names to error messages.
+ * Common format for validation errors, mapping field names to error messages
+ * or providing a Zod-like error array.
  */
 export type ValidationErrors = Record<string, string[]> | Array<{ path: (string | number)[]; message: string }>;
 
@@ -108,54 +110,54 @@ export interface UpdateProfileRequest {
   email?: string;
 }
 
-// Entity types
+// Entity types (Consider these as API DTOs, primary types in entity.d.ts)
 export interface Entity {
   id: string;
   name: string;
-  type?: string;
-  ownerId: string;
+  type?: string; // General type, could align with EntityType from entity.d.ts
+  ownerId: string; // Might refer to user_id who has 'owner' role in EntityAccess
   parentId?: string;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: number; // Unix timestamp
+  updatedAt: number; // Unix timestamp
   metadata?: Record<string, unknown>;
 }
 
-// Financial types
+// Financial types (Consider these as API DTOs)
 export interface Transaction {
   id: string;
   entityId: string;
   description: string;
-  amount: number;
-  date: string;
-  type: 'income' | 'expense' | 'transfer';
+  amount: number; // Assuming in cents or a specific decimal format handled by API
+  date: string; // ISO date string
+  type: 'income' | 'expense' | 'transfer'; // Simplified for API, actual types in transaction.d.ts
   categoryId?: string;
   accountId?: string;
-  toAccountId?: string;
+  toAccountId?: string; // For transfers
   metadata?: Record<string, unknown>;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: number; // Unix timestamp
+  updatedAt: number; // Unix timestamp
 }
 
 export interface Account {
   id: string;
   entityId: string;
   name: string;
-  type: 'asset' | 'liability' | 'equity' | 'income' | 'expense';
-  balance: number;
-  currency: string;
+  type: 'asset' | 'liability' | 'equity' | 'income' | 'expense'; // Simplified, use AccountSystemType from accounting.d.ts
+  balance: number; // Assuming in cents or a specific decimal format
+  currency: string; // e.g., "USD"
   isActive: boolean;
   parentId?: string;
   description?: string;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: number; // Unix timestamp
+  updatedAt: number; // Unix timestamp
 }
 
 // Report types
 export interface ReportRequest {
   entityId: string;
   type: 'balance-sheet' | 'income-statement' | 'cash-flow' | 'custom';
-  startDate?: string;
-  endDate?: string;
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
   period?: 'monthly' | 'quarterly' | 'yearly';
   filters?: Record<string, unknown>;
 }
@@ -165,27 +167,35 @@ export interface ReportData {
   entityId: string;
   type: string;
   title: string;
-  data: unknown;
+  data: unknown; // This should ideally be a more specific type based on report 'type'
   period?: string;
-  startDate?: string;
-  endDate?: string;
-  createdAt: number;
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+  createdAt: number; // Unix timestamp
 }
 
 /**
- * Handler type utilities for API implementation
+ * Handler type utilities for API implementation (generic for any backend)
  */
-export type ApiHandler<RequestType = unknown, ResponseType = unknown> = (
+export type ApiHandler<RequestType = unknown, ResponseType = unknown, ErrorType = ValidationErrors> = (
   request: RequestType
-) => Promise<ApiResponse<ResponseType>>;
+) => Promise<ApiResponse<ResponseType, ErrorType>>;
 
 /**
- * Handler type specific to Cloudflare Workers environment
+ * Handler type specific to Astro API endpoints (using AstroGlobal).
+ * `context.request` is an Astro's augmented Request object.
+ * `context.locals` contains `runtime.env` as CloudflareEnv.
  */
-export type CloudflareApiHandler = (context: {
-  request: Request;
-  env: Record<string, unknown>;
-  cookies: any;
-  cf?: Record<string, unknown>;
-  params?: Record<string, string>;
-}) => Promise<Response>;
+export type AstroApiHandler<Params = Record<string, string | undefined>, ReqB = unknown> = (
+  context: import('astro').APIContext<Record<string, any>, ReqB extends void ? void : ReqB, Params>
+) => Promise<Response>;
+
+/**
+ * Handler type specific to Cloudflare Workers (raw Request, not Astro's context).
+ * Useful for utility workers or non-Astro endpoints if any.
+ */
+export type CloudflareWorkerApiHandler = (
+  request: Request,
+  env: CloudflareEnv, // Use the imported CloudflareEnv
+  ctx: import('@cloudflare/workers-types').ExecutionContext
+) => Promise<Response>;

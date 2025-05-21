@@ -5,468 +5,340 @@
  * Handles creation, retrieval, and deletion of user sessions,
  * typically stored in Cloudflare KV.
  */
-import type { Session } from '@/types/auth';
+import type { Session, User } from '@/types/auth'; // FIXED: Added User import
 import { generateToken } from './auth';
-import { sessionSchema } from '../validation/schemas/auth';
+import { sessionDataSchema } from '../validation/schemas/auth'; // Using sessionDataSchema for the payload
 import type { CloudflareEnv } from '@/env';
 
-// Constants for session management
 const SESSION_PREFIX = 'session:';
 const USER_SESSIONS_PREFIX = 'user_sessions:';
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24; // 1 day
-const MAX_SESSIONS_PER_USER = 5; // Limit the number of concurrent sessions per user
+const MAX_SESSIONS_PER_USER = 5;
 
-/**
- * Gets the full key for a session in KV storage
- * @param sessionId The unique session identifier
- * @returns The prefixed KV key for the session
- */
 function getSessionKey(sessionId: string): string {
   return `${SESSION_PREFIX}${sessionId}`;
 }
 
-/**
- * Gets the full key for tracking a user's sessions in KV storage
- * @param userId The unique user identifier
- * @returns The prefixed KV key for user sessions tracking
- */
 function getUserSessionsKey(userId: string): string {
   return `${USER_SESSIONS_PREFIX}${userId}`;
 }
 
-/**
- * Creates a new session for a user
- * @param env Cloudflare environment bindings
- * @param userId The ID of the user to create a session for
- * @param expiresInSeconds Session duration in seconds (default: 1 day)
- * @param sessionDetails Additional metadata to store with the session
- * @returns The newly created session object
- */
 export async function createSession(
   env: CloudflareEnv,
   userId: string,
   expiresInSeconds: number = DEFAULT_SESSION_TTL_SECONDS,
-  sessionDetails: Record<string, any> = {}
+  // Use Partial<Session['data']> for incoming details
+  sessionDetails: Partial<Exclude<Session['data'], undefined>> = {}
 ): Promise<Session> {
-  if (!userId) {
-    throw new Error("User ID is required to create a session");
+  if (!userId) throw new Error("User ID is required to create a session.");
+  if (expiresInSeconds <= 0 || expiresInSeconds > 60 * 60 * 24 * 90) {
+    throw new Error("Invalid session expiration time (must be > 0 and <= 90 days).");
   }
 
-  // Validate expiration time
-  if (expiresInSeconds <= 0 || expiresInSeconds > 60 * 60 * 24 * 90) { // Max 90 days
-    throw new Error("Invalid session expiration time");
-  }
+  const sessionId = generateToken(32);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const expiresAtSeconds = nowSeconds + expiresInSeconds;
 
-  const sessionId = generateToken(32); // 32 bytes for session ID
-  const now = Math.floor(Date.now() / 1000);
-  const expiresAt = now + expiresInSeconds;
-
-  // Add useful metadata to the session
-  const sessionToStore: Session = {
-    id: sessionId,
-    userId,
-    createdAt: now,
-    expiresAt,
-    data: { 
-      ...sessionDetails,
-      createdAt: now,
-      lastActivity: now,
-      userAgent: sessionDetails.userAgent || 'unknown',
-      ip: sessionDetails.ip || 'unknown' 
-    }
+  // Construct the data payload, ensuring currentEntityId is string | undefined
+  const sessionDataPayload: Exclude<Session['data'], undefined> = {
+    ip: sessionDetails?.ip || 'unknown',
+    userAgent: sessionDetails?.userAgent || 'unknown',
+    lastActivityAt: sessionDetails?.lastActivityAt || nowSeconds,
+    // FIXED: Ensure currentEntityId is string | undefined, converting null if necessary
+    currentEntityId: sessionDetails?.currentEntityId === null ? undefined : sessionDetails?.currentEntityId,
+    isMfaVerified: sessionDetails?.isMfaVerified || false,
+    // createdAt in payload might be redundant with Session.createdAt, but keeping if intended
+    createdAt: sessionDetails?.createdAt || nowSeconds,
+    // Allow other customData
+    ...(sessionDetails.customData && { customData: sessionDetails.customData }),
   };
 
-  // Validate session data structure
-  const validationResult = sessionSchema.safeParse(sessionToStore);
-  if (!validationResult.success) {
-    console.error("Session data failed validation:", validationResult.error.flatten().fieldErrors);
-    throw new Error(`Invalid session data for creation: ${validationResult.error.errors[0]?.message}`);
+  // Validate the session *data payload*
+  const dataValidationResult = sessionDataSchema.safeParse(sessionDataPayload);
+  if(!dataValidationResult.success) {
+    console.error("Session data payload failed validation:", dataValidationResult.error.flatten().fieldErrors);
+    throw new Error(`Invalid session data payload: ${dataValidationResult.error.errors[0]?.message}`);
   }
+
+  const sessionRecordToStore: Session = {
+    id: sessionId,
+    userId,
+    createdAt: nowSeconds,
+    expiresAt: expiresAtSeconds,
+    data: dataValidationResult.data as Exclude<Session['data'], undefined>, // Use validated data
+  };
 
   const kv = env.SESSION_KV;
   if (!kv) throw new Error("SESSION_KV binding not found in environment.");
 
   try {
-    // Store the session with proper expiration
-    await kv.put(getSessionKey(sessionId), JSON.stringify(validationResult.data), {
-      expiration: expiresAt,
+    await kv.put(getSessionKey(sessionId), JSON.stringify(sessionRecordToStore), {
+      expiration: expiresAtSeconds,
     });
 
-    // Track this session for the user to manage concurrent sessions
     const userSessionsKey = getUserSessionsKey(userId);
-    let userSessions: string[] = [];
-    
-    try {
-      const existingSessionsJSON = await kv.get(userSessionsKey);
-      if (existingSessionsJSON) {
-        userSessions = JSON.parse(existingSessionsJSON);
-        // Ensure userSessions is an array
-        if (!Array.isArray(userSessions)) {
-          userSessions = [];
-          console.warn(`Invalid user sessions data for user ${userId}. Resetting.`);
-        }
-      }
-    } catch (error) {
-      console.error(`Error retrieving user sessions for ${userId}:`, error);
-      // Continue with an empty array
+    let userActiveSessions: string[] = [];
+    const existingSessionsJson = await kv.get(userSessionsKey);
+    if (existingSessionsJson) {
+      try {
+        userActiveSessions = JSON.parse(existingSessionsJson);
+        if (!Array.isArray(userActiveSessions)) userActiveSessions = [];
+      } catch (e) { console.warn(`Corrupted session list for user ${userId}, resetting.`); userActiveSessions = []; }
     }
-    
-    // Add the new session ID
-    userSessions.push(sessionId);
-    
-    // Enforce the session limit per user
-    if (userSessions.length > MAX_SESSIONS_PER_USER) {
-      // Remove the oldest sessions (first in the array)
-      const oldestSessionIds = userSessions.splice(0, userSessions.length - MAX_SESSIONS_PER_USER);
-      
-      // Delete the oldest sessions in a batch operation
-      const deletePromises = oldestSessionIds.map(oldId => kv.delete(getSessionKey(oldId)));
+    userActiveSessions.push(sessionId);
+
+    if (userActiveSessions.length > MAX_SESSIONS_PER_USER) {
+      const sessionsToRemove = userActiveSessions.splice(0, userActiveSessions.length - MAX_SESSIONS_PER_USER);
+      const deletePromises = sessionsToRemove.map(oldId => kv.delete(getSessionKey(oldId)));
       await Promise.allSettled(deletePromises);
     }
-    
-    // Store the updated list of sessions for this user
-    await kv.put(userSessionsKey, JSON.stringify(userSessions), { 
-      // Set expiration to the furthest future session expiry (add a buffer of 7 days)
-      expiration: expiresAt + (7 * 24 * 60 * 60)
+    const furthestExpiry = userActiveSessions.length > 0 ? expiresAtSeconds : nowSeconds;
+    await kv.put(userSessionsKey, JSON.stringify(userActiveSessions), {
+        expiration: furthestExpiry + (7 * 24 * 60 * 60)
     });
-
-    return validationResult.data;
+    return sessionRecordToStore;
   } catch (error) {
-    console.error("Error creating session:", error);
-    throw new Error("Failed to create session. Please try again.");
+    console.error("Error creating session in KV:", error);
+    throw new Error("Failed to create session due to a storage error.");
   }
 }
 
-/**
- * Retrieves a session by ID
- * @param env Cloudflare environment bindings
- * @param sessionId The unique session identifier
- * @returns The session object if found and valid, null otherwise
- */
 export async function getSession(
   env: CloudflareEnv,
   sessionId: string
 ): Promise<Session | null> {
   if (!sessionId) return null;
-  
   const kv = env.SESSION_KV;
-  if (!kv) { 
-    console.error("SESSION_KV binding not found."); 
-    return null; 
-  }
+  if (!kv) { console.error("SESSION_KV binding not found."); return null; }
 
-  // Get session from KV store
   const sessionJSON = await kv.get(getSessionKey(sessionId));
   if (!sessionJSON) return null;
 
   try {
-    const parsedData = JSON.parse(sessionJSON);
-    const validationResult = sessionSchema.safeParse(parsedData);
-    
-    if (validationResult.success) {
-      // Check if session is expired
-      const now = Math.floor(Date.now() / 1000);
-      if (validationResult.data.expiresAt <= now) {
-        console.info(`Session ${sessionId} has expired. Cleaning up.`);
+    const parsedData = JSON.parse(sessionJSON) as Session;
+    if (!parsedData || typeof parsedData.id !== 'string' || parsedData.id !== sessionId || typeof parsedData.userId !== 'string' || typeof parsedData.expiresAt !== 'number') {
+        console.warn(`Invalid session structure for ${sessionId}. Cleaning up.`);
         await kv.delete(getSessionKey(sessionId));
         return null;
-      }
-      
-      // Update last activity time if session is retrieved successfully
-      // We'll do this in a non-blocking way to avoid slowing down the request
-      try {
-        const sessionData = validationResult.data;
-        if (sessionData.data) {
-          sessionData.data.lastActivity = now;
-          kv.put(getSessionKey(sessionId), JSON.stringify(sessionData), {
-            expiration: sessionData.expiresAt
-          }).catch(err => {
-            console.warn("Failed to update session last activity:", err);
-          });
-        }
-      } catch (updateError) {
-        // Don't fail the session retrieval if activity update fails
-        console.warn("Error updating session activity:", updateError);
-      }
-      
-      return validationResult.data;
     }
-    
-    console.warn('Session data from KV failed validation:', validationResult.error.flatten().fieldErrors);
-    // Attempt to clean up invalid session data
-    await kv.delete(getSessionKey(sessionId));
-    return null;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    if (parsedData.expiresAt <= nowSeconds) {
+      console.info(`Session ${sessionId} has expired. Cleaning up.`);
+      await kv.delete(getSessionKey(sessionId));
+      return null;
+    }
+
+    if (parsedData.data) {
+        // Validate data payload; currentEntityId in parsedData.data can be string | null | undefined
+        const dataToValidate = {
+            ...parsedData.data,
+            currentEntityId: parsedData.data.currentEntityId === null ? undefined : parsedData.data.currentEntityId,
+        };
+        const dataValidation = sessionDataSchema.safeParse(dataToValidate);
+        if (!dataValidation.success) {
+            console.warn(`Session data payload for ${sessionId} failed validation.`, dataValidation.error.flatten().fieldErrors);
+        } else {
+            // Ensure parsedData.data aligns with the validated structure, especially null vs undefined
+            parsedData.data = dataValidation.data as Exclude<Session['data'], undefined>;
+        }
+    }
+
+    if (parsedData.data) {
+      parsedData.data.lastActivityAt = nowSeconds;
+      kv.put(getSessionKey(sessionId), JSON.stringify(parsedData), {
+        expiration: parsedData.expiresAt
+      }).catch(err => console.warn("Failed to update session lastActivityAt:", err));
+    }
+    return parsedData;
   } catch (error) {
     console.error('Error parsing session data from KV:', error);
-    // Clean up corrupted session data
     await kv.delete(getSessionKey(sessionId));
     return null;
   }
 }
 
-/**
- * Retrieves session and user data from a request
- * @param request The incoming request object
- * @param env Cloudflare environment bindings
- * @returns Session and user data if available
- */
 export async function getSessionFromRequest(
   request: Request,
   env: CloudflareEnv
-): Promise<{ session: Session; user: any; sessionId: string } | null> {
+): Promise<{ session: Session; user: User; sessionId: string } | null> {
   try {
-    // Extract session ID from cookies
     const cookies = parseCookies(request.headers.get('Cookie') || '');
     const sessionId = cookies['session-token'];
-    
-    if (!sessionId) {
-      return null;
-    }
-    
-    // Get session data
+    if (!sessionId) return null;
+
     const session = await getSession(env, sessionId);
-    if (!session || !session.userId) {
-      return null;
-    }
-    
-    // Get user data (imported from auth)
+    if (!session || !session.userId) return null;
+
     const { getUserById } = await import('./auth');
     const user = await getUserById(env, session.userId);
-    
     if (!user) {
+      await deleteSession(env, sessionId);
       return null;
     }
-    
-    return {
-      session,
-      user,
-      sessionId
-    };
+    return { session, user, sessionId };
   } catch (error) {
     console.error('Error getting session from request:', error);
     return null;
   }
 }
 
-/**
- * Deletes a session by ID
- * @param env Cloudflare environment bindings
- * @param sessionId The unique session identifier
- */
 export async function deleteSession(
   env: CloudflareEnv,
   sessionId: string
 ): Promise<void> {
   if (!sessionId) return;
-  
   const kv = env.SESSION_KV;
-  if (!kv) { 
-    console.error("SESSION_KV binding not found."); 
-    return; 
-  }
+  if (!kv) { console.error("SESSION_KV binding not found."); return; }
 
   const sessionKey = getSessionKey(sessionId);
-
   try {
-    // Get the session to find the userId
     const sessionJSON = await kv.get(sessionKey);
-    
+    await kv.delete(sessionKey);
+
     if (sessionJSON) {
-      const parsedSession = JSON.parse(sessionJSON);
-      const validationResult = sessionSchema.safeParse(parsedSession); 
-      
-      if (validationResult.success && validationResult.data.userId) {
-        const userId = validationResult.data.userId;
-        
-        // Get the user's sessions list
-        const userSessionsKey = getUserSessionsKey(userId);
-        const existingSessionsJSON = await kv.get(userSessionsKey);
-        
-        if (existingSessionsJSON) {
+      const parsedSession = JSON.parse(sessionJSON) as Session;
+      if (parsedSession && parsedSession.userId) {
+        const userSessionsKey = getUserSessionsKey(parsedSession.userId);
+        const existingSessionsJson = await kv.get(userSessionsKey);
+        if (existingSessionsJson) {
           try {
-            let userSessions: string[] = JSON.parse(existingSessionsJSON);
-            
-            // Remove this session ID from the list
-            userSessions = userSessions.filter(id => id !== sessionId);
-            
-            // Update the user sessions list
-            if (userSessions.length > 0) {
-              await kv.put(userSessionsKey, JSON.stringify(userSessions), {
-                // Keep the same expiration that was set when creating
-                expiration: validationResult.data.expiresAt + (7 * 24 * 60 * 60)
-              });
-            } else {
-              // No more sessions for this user, remove the tracking key
-              await kv.delete(userSessionsKey);
+            let userActiveSessions: string[] = JSON.parse(existingSessionsJson);
+            if (Array.isArray(userActiveSessions)) {
+              userActiveSessions = userActiveSessions.filter(id => id !== sessionId);
+              if (userActiveSessions.length > 0) {
+                await kv.put(userSessionsKey, JSON.stringify(userActiveSessions), {
+                  // Consider updating expiration if relevant
+                });
+              } else {
+                await kv.delete(userSessionsKey);
+              }
             }
-          } catch(parseError) {
-            console.error("Error parsing user sessions list:", parseError);
-          }
+          } catch (e) { console.error(`Error updating user session list for ${parsedSession.userId}:`, e); }
         }
       }
     }
-    
-    // Delete the session itself
-    await kv.delete(sessionKey);
-  } catch(error) {
-    console.error("Error during session deletion:", error);
-  }
+  } catch(error) { console.error(`Error during session deletion for ${sessionId}:`, error); }
 }
 
-/**
- * Deletes all sessions for a user
- * @param env Cloudflare environment bindings
- * @param userId The unique user identifier
- */
 export async function deleteAllUserSessions(
   env: CloudflareEnv,
   userId: string
 ): Promise<void> {
   if (!userId) return;
-  
   const kv = env.SESSION_KV;
-  if (!kv) { 
-    console.error("SESSION_KV binding not found."); 
-    return; 
-  }
+  if (!kv) { console.error("SESSION_KV binding not found."); return; }
 
   const userSessionsKey = getUserSessionsKey(userId);
-  
   try {
     const existingSessionsJSON = await kv.get(userSessionsKey);
-    
     if (existingSessionsJSON) {
       try {
-        const userSessions: string[] = JSON.parse(existingSessionsJSON);
-        
-        // Delete all session records in parallel
-        const deletePromises = userSessions.map(id => kv.delete(getSessionKey(id)));
-        await Promise.allSettled(deletePromises);
-      } catch (parseError) {
-        console.error("Error parsing user's session list for multi-deletion:", parseError);
-      }
+        const userActiveSessions: string[] = JSON.parse(existingSessionsJSON);
+        if (Array.isArray(userActiveSessions)) {
+          const deletePromises = userActiveSessions.map(id => kv.delete(getSessionKey(id)));
+          await Promise.allSettled(deletePromises);
+        }
+      } catch (e) { console.error(`Corrupted session list for user ${userId} during deleteAll:`, e); }
     }
-    
-    // Delete the tracking key
     await kv.delete(userSessionsKey);
   } catch (error) {
-    console.error("Error deleting all user sessions:", error);
-    throw new Error("Failed to delete all sessions");
+    console.error(`Error deleting all sessions for user ${userId}:`, error);
   }
 }
 
-/**
- * Extends a session's expiration time
- * @param env Cloudflare environment bindings
- * @param sessionId The unique session identifier
- * @param newExpiresInSeconds New session duration in seconds (default: 1 day)
- * @returns The updated session object if successful, null otherwise
- */
 export async function extendSession(
   env: CloudflareEnv,
   sessionId: string,
   newExpiresInSeconds: number = DEFAULT_SESSION_TTL_SECONDS
 ): Promise<Session | null> {
   if (!sessionId) return null;
-  
   const kv = env.SESSION_KV;
-  if (!kv) { 
-    console.error("SESSION_KV binding not found."); 
-    return null; 
-  }
+  if (!kv) { console.error("SESSION_KV binding not found."); return null; }
 
-  // Validate the extension time
-  if (newExpiresInSeconds <= 0 || newExpiresInSeconds > 60 * 60 * 24 * 90) { // Max 90 days
-    console.error("Invalid session extension time:", newExpiresInSeconds);
+  if (newExpiresInSeconds <= 0 || newExpiresInSeconds > 60 * 60 * 24 * 90) {
+    console.error("Invalid session extension time provided:", newExpiresInSeconds);
     return null;
   }
 
   const sessionKey = getSessionKey(sessionId);
-  
   try {
-    // Get the current session
     const sessionJSON = await kv.get(sessionKey);
     if (!sessionJSON) return null;
 
-    const parsedSession = JSON.parse(sessionJSON);
-    let validationResult = sessionSchema.safeParse(parsedSession);
-    
-    if (!validationResult.success) {
-      console.warn('Invalid session data found during extend:', validationResult.error.flatten().fieldErrors);
-      await kv.delete(sessionKey);
-      return null;
+    const parsedSession = JSON.parse(sessionJSON) as Session;
+     if (!parsedSession || typeof parsedSession.id !== 'string' || typeof parsedSession.userId !== 'string' || typeof parsedSession.expiresAt !== 'number') {
+        console.warn(`Invalid session structure for ${sessionId} during extend. Cleaning up.`);
+        await kv.delete(sessionKey);
+        return null;
     }
-    
-    const sessionData = validationResult.data;
-    const now = Math.floor(Date.now() / 1000);
-    
-    // Check if session is already expired
-    if (sessionData.expiresAt <= now) {
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    if (parsedSession.expiresAt <= nowSeconds) {
       console.info(`Cannot extend session ${sessionId} - already expired.`);
       await kv.delete(sessionKey);
       return null;
     }
-    
-    // Set new expiration time
-    sessionData.expiresAt = now + newExpiresInSeconds;
-    
-    // Update last activity time
-    if (sessionData.data) {
-      sessionData.data.lastActivity = now;
-      sessionData.data.extended = true;
-      sessionData.data.extensionCount = (sessionData.data.extensionCount || 0) + 1;
-    }
 
-    // Validate the updated session
-    validationResult = sessionSchema.safeParse(sessionData); 
-    if (!validationResult.success) {
-      console.error("Extended session data failed validation:", validationResult.error.flatten().fieldErrors);
-      throw new Error("Invalid session data for extension.");
-    }
-    
-    const updatedSessionData = validationResult.data;
+    const updatedSessionRecord = { ...parsedSession };
+    updatedSessionRecord.expiresAt = nowSeconds + newExpiresInSeconds;
 
-    // Store the updated session
-    await kv.put(sessionKey, JSON.stringify(updatedSessionData), {
-      expiration: updatedSessionData.expiresAt,
+    let validatedDataPayload: Exclude<Session['data'], undefined> | undefined = undefined;
+    if (updatedSessionRecord.data) {
+      updatedSessionRecord.data.lastActivityAt = nowSeconds;
+      updatedSessionRecord.data.extended = true; // Ensure these properties are in Session['data'] type
+      updatedSessionRecord.data.extensionCount = (updatedSessionRecord.data.extensionCount || 0) + 1;
+
+      // FIXED: Ensure currentEntityId is string | undefined before validating with sessionDataSchema
+      const dataToValidate = {
+          ...updatedSessionRecord.data,
+          currentEntityId: updatedSessionRecord.data.currentEntityId === null ? undefined : updatedSessionRecord.data.currentEntityId,
+      };
+      const dataValidation = sessionDataSchema.safeParse(dataToValidate);
+      if (!dataValidation.success) {
+          console.error("Extended session data payload failed validation:", dataValidation.error.flatten().fieldErrors);
+          throw new Error("Invalid session data after extension attempt.");
+      }
+      validatedDataPayload = dataValidation.data as Exclude<Session['data'], undefined>;
+    } else {
+      // If no data object exists, create one for activity tracking
+      validatedDataPayload = { lastActivityAt: nowSeconds, extended: true, extensionCount: 1 };
+    }
+    updatedSessionRecord.data = validatedDataPayload;
+
+
+    await kv.put(sessionKey, JSON.stringify(updatedSessionRecord), {
+      expiration: updatedSessionRecord.expiresAt,
     });
 
-    // Update the user sessions tracking if needed
-    if (updatedSessionData.userId) {
-      const userSessionsKey = getUserSessionsKey(updatedSessionData.userId);
-      const existingUserSessions = await kv.get(userSessionsKey); 
-      
-      if (existingUserSessions) {
-        // Update the expiration time of the user sessions list
-        await kv.put(userSessionsKey, existingUserSessions, { 
-          expiration: updatedSessionData.expiresAt + (7 * 24 * 60 * 60) 
-        });
-      }
+    if (updatedSessionRecord.userId) {
+        const userSessionsKey = getUserSessionsKey(updatedSessionRecord.userId);
+        const existingUserSessionsMeta = await kv.getWithMetadata(userSessionsKey);
+        if (existingUserSessionsMeta.value) { // Check if value exists
+             const newExpiration = updatedSessionRecord.expiresAt + (7 * 24 * 60 * 60);
+             const currentListExpiration = (existingUserSessionsMeta.metadata as {expiration?: number} | null)?.expiration;
+             if (!currentListExpiration || newExpiration > currentListExpiration) {
+                await kv.put(userSessionsKey, existingUserSessionsMeta.value, {
+                    expiration: newExpiration
+                });
+             }
+        }
     }
-    
-    return updatedSessionData;
+    return updatedSessionRecord;
   } catch (error) {
-    console.error('Error extending session:', error);
+    console.error(`Error extending session ${sessionId}:`, error);
     return null;
   }
 }
 
-/**
- * Helper function to parse cookies from a cookie header string
- * @param cookieHeader Cookie header string
- * @returns Object with cookie name-value pairs
- */
 function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {};
-  
   if (!cookieHeader) return cookies;
-  
   cookieHeader.split(';').forEach(cookie => {
-    const [name, value] = cookie.trim().split('=');
-    if (name && value !== undefined) {
-      cookies[name] = value;
+    const parts = cookie.split('=');
+    const name = parts.shift()?.trim();
+    if (name) {
+      cookies[name] = parts.join('=').trim();
     }
   });
-  
   return cookies;
 }
