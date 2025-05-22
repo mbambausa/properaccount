@@ -1,0 +1,70 @@
+# .github/workflows/deploy-prod.yml
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main # Trigger deployment when code is pushed/merged to main
+
+jobs:
+  # First, ensure tests pass on the main branch code
+  test-on-main:
+    name: Test on Main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linters
+        run: npm run lint # Ensure code quality before production deploy
+
+      - name: Run tests
+        run: npm test
+
+  # Deploy to production if tests pass
+  deploy-production:
+    name: Deploy to Production
+    needs: test-on-main # Depends on the test job passing
+    runs-on: ubuntu-latest
+    environment: # Optional: Define a GitHub environment for production for rules/secrets
+      name: production
+      url: https://your-properaccount-domain.com # Replace with your actual production URL
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages Production
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # The command for production deployment differs slightly:
+          # No --branch flag, or explicitly --branch=main
+          # Ensure your `pages:deploy:production` script handles this or use the command directly.
+          # If your npm script `pages:deploy:production` is already set up for production, use that:
+          # command: npm run pages:deploy:production
+          # Otherwise, be explicit:
+          command: pages deploy ./dist --project-name=properaccount --branch=main
+          wranglerVersion: '4.16.0' # Consistent with your setup

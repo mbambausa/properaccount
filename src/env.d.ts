@@ -42,7 +42,14 @@ export interface CloudflareEnv {
 declare global {
   interface Window {
     Alpine?: AlpineType;
-    // (other globals as before…)
+    // Add the declaration for showToast
+    showToast?: (
+      type: 'success' | 'error' | 'info' | 'warning',
+      message: string,
+      duration?: number
+    ) => void;
+    // You also had window.toggleTheme in AuthLayout.astro, declare it too if not already.
+    toggleTheme?: () => void;
   }
 
   namespace App {

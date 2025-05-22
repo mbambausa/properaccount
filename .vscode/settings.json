@@ -36,7 +36,7 @@
   "files.associations": {
     "*.mdx": "markdown"
   },
-  "tailwindCSS.includeLanguages": {
+  "tailwindCSS.includeLanguages": { // Note: Your project uses UnoCSS, not Tailwind CSS.
     "astro": "html"
   },
   "javascript.preferences.importModuleSpecifier": "non-relative",

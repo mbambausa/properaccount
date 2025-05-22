@@ -1,22 +1,17 @@
 // src/utils/csrf.ts
-import { doubleCsrf } from 'csrf-csrf';
+import { doubleCsrf, type DoubleCsrfUtilities, type DoubleCsrfConfigOptions } from 'csrf-csrf';
+// Removed GenerateTokenOptions/GenerateCsrfTokenOptions import as it's not directly used in the call
 import type { APIContext } from 'astro';
-import type { CloudflareEnv } from '../env'; // Assumes csrf.ts is in src/utils/
+import type { CloudflareEnv } from '../env';
 
-// Define the shape of CSRF utilities returned by doubleCsrf
-type CsrfLibraryUtils = ReturnType<typeof doubleCsrf>;
+type CsrfLibraryUtils = DoubleCsrfUtilities;
 
-// Singleton instance for CSRF utilities
 let csrfUtilsInstance: CsrfLibraryUtils | null = null;
+let csrfConfigOptionsUsed: DoubleCsrfConfigOptions | null = null;
 
 const DEFAULT_CSRF_FALLBACK_SECRET =
   'unsafe-fallback-dev-secret-must-be-at-least-32-bytes-long-for-csrf';
 
-/**
- * Initializes and returns CSRF utility functions using a singleton pattern.
- * @param env - The runtime environment containing secrets and configurations.
- * @returns An object with CSRF utility functions.
- */
 function getCsrfUtils(env: CloudflareEnv): CsrfLibraryUtils {
   if (csrfUtilsInstance) {
     return csrfUtilsInstance;
@@ -26,7 +21,7 @@ function getCsrfUtils(env: CloudflareEnv): CsrfLibraryUtils {
 
   if (!secret || secret.length < 32) {
     secret = DEFAULT_CSRF_FALLBACK_SECRET;
-    if (env.ENVIRONMENT === 'production' || !import.meta.env.DEV) {
+    if (env.ENVIRONMENT === 'production' || !import.meta.env.PROD) {
       console.error(
         'CRITICAL CSRF Setup Error: CSRF_SECRET is missing or too short in a production-like environment. Using an insecure fallback.'
       );
@@ -37,7 +32,15 @@ function getCsrfUtils(env: CloudflareEnv): CsrfLibraryUtils {
     }
   }
 
-  const csrfLibUtils = doubleCsrf({
+  const cookieOptionsConfig: DoubleCsrfConfigOptions["cookieOptions"] = {
+    path: '/',
+    secure: env.ENVIRONMENT === 'production',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 2, // 2 hours in seconds
+  };
+
+  const configToUse: DoubleCsrfConfigOptions = {
     getSecret: () => secret,
     getSessionIdentifier: (req: Request): string => {
       const isProdLike = env.ENVIRONMENT === 'production';
@@ -59,17 +62,12 @@ function getCsrfUtils(env: CloudflareEnv): CsrfLibraryUtils {
       return "__anonymous_csrf_session__";
     },
     cookieName: env.ENVIRONMENT === 'production' ? '__Host-csrf.secret' : 'csrf.secret',
-    cookieOptions: {
-      path: '/',
-      secure: env.ENVIRONMENT === 'production',
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 2, // 2 hours in seconds
-    },
+    cookieOptions: cookieOptionsConfig,
     size: 64,
-  });
+  };
 
-  csrfUtilsInstance = csrfLibUtils;
+  csrfConfigOptionsUsed = configToUse;
+  csrfUtilsInstance = doubleCsrf(configToUse);
   return csrfUtilsInstance;
 }
 
@@ -77,45 +75,60 @@ export async function prepareCsrfToken(context: APIContext): Promise<string> {
   const env = context.locals.runtime?.env as CloudflareEnv | undefined;
 
   if (!env) {
-    const errorMessage = 'CSRF Prep: CloudflareEnv missing from context.locals.runtime. Cannot prepare CSRF token.';
+    const errorMessage = 'CSRF Prep: CloudflareEnv missing. Cannot prepare CSRF token.';
     console.error(errorMessage);
     if (import.meta.env.DEV) return 'dev-csrf-token-env-missing';
-    throw new Error('Server configuration error: Runtime environment not found for CSRF preparation.');
+    throw new Error('Server configuration error: Runtime environment not found.');
   }
 
-  const { generateToken } = getCsrfUtils(env);
-  const dummyResponse = new Response(null);
+  const csrfUtils = getCsrfUtils(env);
 
   try {
-    const csrfToken = generateToken(context.request, dummyResponse, true);
+    const dummyResponse = new Response(null);
+    // Corrected method name: generateCsrfToken
+    const csrfToken = csrfUtils.generateCsrfToken(dummyResponse, context.request); // [cite: 2]
+
     const setCookieHeader = dummyResponse.headers.get('set-cookie');
 
     if (setCookieHeader) {
       const cookieParts = setCookieHeader.split(';').map(part => part.trim());
       const [nameValue, ...optionsArray] = cookieParts;
       const [cookieName, cookieValue] = nameValue.split('=');
-      const astroCookieOptions: Record<string, any> = {
-        httpOnly: true,
-        secure: env.ENVIRONMENT === 'production',
-        path: '/',
-        sameSite: 'lax',
+      
+      const astroCookieOptions: import('astro').AstroCookieSetOptions = {
+        httpOnly: csrfConfigOptionsUsed?.cookieOptions?.httpOnly ?? true,
+        secure: csrfConfigOptionsUsed?.cookieOptions?.secure ?? (env.ENVIRONMENT === 'production'),
+        path: csrfConfigOptionsUsed?.cookieOptions?.path ?? '/',
+        sameSite: (csrfConfigOptionsUsed?.cookieOptions?.sameSite ?? 'lax') as 'lax' | 'strict' | 'none' | boolean | undefined,
       };
+
       optionsArray.forEach(part => {
         const [key, ...valParts] = part.split('=');
         const value = valParts.join('=');
-        if (key.toLowerCase() === 'max-age' && value) {
+        const lowerKey = key.toLowerCase();
+
+        if (lowerKey === 'max-age' && value) {
           astroCookieOptions.maxAge = parseInt(value, 10);
-        }
-        if (key.toLowerCase() === 'expires' && value) {
+        } else if (lowerKey === 'expires' && value) {
            astroCookieOptions.expires = new Date(value);
+        } else if (lowerKey === 'path' && value) {
+          astroCookieOptions.path = value;
+        } else if (lowerKey === 'samesite' && value) {
+          astroCookieOptions.sameSite = value.toLowerCase() as 'lax' | 'strict' | 'none';
+        } else if (lowerKey === 'secure') {
+          astroCookieOptions.secure = true;
+        } else if (lowerKey === 'httponly') {
+          astroCookieOptions.httpOnly = true;
         }
       });
+      
       if (astroCookieOptions.maxAge === undefined && astroCookieOptions.expires === undefined) {
-        astroCookieOptions.maxAge = 60 * 60 * 2;
+        astroCookieOptions.maxAge = csrfConfigOptionsUsed?.cookieOptions?.maxAge ?? (60 * 60 * 2);
       }
+
       context.cookies.set(cookieName, cookieValue, astroCookieOptions);
     } else {
-      console.warn("CSRF Prep: 'set-cookie' header for CSRF secret was not generated by csrf-csrf library.");
+      console.warn("CSRF Prep: 'set-cookie' header for CSRF secret was not generated.");
     }
     return csrfToken;
   } catch (error) {
@@ -131,8 +144,10 @@ export async function validateCsrfRequest(
   contextOrRequest: APIContext | Request,
   envOverride?: CloudflareEnv
 ): Promise<boolean> {
-  const request = (contextOrRequest as APIContext).request || (contextOrRequest as Request);
-  const env = envOverride || (contextOrRequest as APIContext).locals?.runtime?.env as CloudflareEnv | undefined;
+  const request = 'request' in contextOrRequest ? contextOrRequest.request : contextOrRequest;
+  const locals = 'locals' in contextOrRequest ? contextOrRequest.locals : undefined;
+  
+  const env = envOverride || locals?.runtime?.env as CloudflareEnv | undefined;
 
   if (!env) {
     console.error('CSRF Valid: CloudflareEnv missing. CSRF validation cannot proceed.');
@@ -141,7 +156,6 @@ export async function validateCsrfRequest(
 
   try {
     const { validateRequest } = getCsrfUtils(env);
-    // FIXED: validateRequest from csrf-csrf typically only takes the request object.
     const isValid = validateRequest(request);
 
     if (!isValid) {

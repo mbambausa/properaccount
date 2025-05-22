@@ -24,9 +24,9 @@ export interface Props {
 const {
   as = Astro.props.href ? 'a' : 'button',
   href,
-  type = 'button' as ButtonType, // Ensure type for default
-  variant = 'primary' as ButtonVariant, // Ensure type for default
-  size = 'md' as ButtonSize,           // Ensure type for default
+  type = 'button' as ButtonType,
+  variant = 'primary' as ButtonVariant,
+  size = 'md' as ButtonSize,
   fullWidth = false,
   disabled = false,
   loading = false,
@@ -36,7 +36,7 @@ const {
   'data-testid': dataTestId,
   target,
   rel,
-} = Astro.props as Props; // Explicitly cast Astro.props
+} = Astro.props as Props;
 
 const baseClasses = 'btn font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 inline-flex items-center justify-center transition-colors duration-150 ease-in-out';
 
@@ -56,11 +56,11 @@ const variantClasses: Record<ButtonVariant, string> = {
   danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 focus:ring-offset-red-50 dark:bg-red-700 dark:hover:bg-red-800',
 };
 
-// Access with explicit types to satisfy TS
 const currentSizeClass = sizeClasses[size];
 const currentVariantClass = variantClasses[variant];
 
-const combinedClasses = [
+// Initial combined classes, can be overridden by link-specific disabled state
+let combinedClasses = [
   baseClasses,
   currentSizeClass,
   currentVariantClass,
@@ -72,33 +72,29 @@ const combinedClasses = [
   .filter(Boolean)
   .join(' ');
 
-const commonAttrs = {
-  id,
-  class: combinedClasses,
-  'data-testid': dataTestId,
-};
+// Specific attributes for the link element
+let linkAriaDisabled: 'true' | undefined = undefined;
+let linkTabIndex: number | undefined = undefined;
 
-// For aria-busy, HTML standard is string "true" or "false".
-// React's AriaAttributes type boolean | 'false' | 'true' | 'grammar' | 'spelling' etc.
-// Let's stick to string "true" if that's what the error implies.
-const buttonSpecificAttrs = {
-  type: as === 'button' ? type : undefined,
-  disabled: as === 'button' ? (disabled || loading) : undefined,
-  form: as === 'button' ? form : undefined,
-  'aria-live': loading ? ('polite' as 'polite') : undefined, // Explicit cast for literal
-  'aria-busy': loading ? ('true' as 'true') : undefined,     // Explicit cast for literal
-};
+if (as === 'a' && disabled) {
+  combinedClasses = `${combinedClasses} opacity-50 cursor-not-allowed pointer-events-none`.trim();
+  linkAriaDisabled = 'true';
+  linkTabIndex = -1;
+}
 
-const linkSpecificAttrs = {
-  href: as === 'a' ? href : undefined,
-  target: as === 'a' ? target : undefined,
-  rel: as === 'a' ? rel : undefined,
-  class: (disabled && as === 'a') ? `${combinedClasses} opacity-50 cursor-not-allowed pointer-events-none` : combinedClasses,
-};
 ---
 
 {as === 'button' ? (
-  <button {...commonAttrs} {...buttonSpecificAttrs}>
+  <button
+    id={id}
+    class={combinedClasses}
+    data-testid={dataTestId}
+    type={type}
+    disabled={disabled || loading}
+    form={form}
+    aria-live={loading ? 'polite' : undefined}
+    aria-busy={loading ? 'true' : undefined}
+  >
     {loading && (
       <span class="inline-flex items-center leading-none">
         <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-hidden="true">
@@ -110,12 +106,20 @@ const linkSpecificAttrs = {
     <slot />
   </button>
 ) : (
-  <a {...commonAttrs} {...linkSpecificAttrs}>
-    {/* Loading state for links might be different or not visually indicated this way */}
-    {loading && as === 'a' && (
+  <a
+    id={id}
+    class={combinedClasses}
+    data-testid={dataTestId}
+    href={disabled ? undefined : href}
+    target={target}
+    rel={rel}
+    aria-disabled={linkAriaDisabled}
+    tabindex={linkTabIndex}
+    role={href && href !== '#' ? undefined : "button"}
+  >
+    {loading && ( // Loading indicator for links
       <span class="inline-flex items-center leading-none">
         <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-hidden="true">
-          {/* SVG content same as above */}
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>

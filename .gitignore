@@ -53,7 +53,6 @@ dist/
 # =========================================
 .mf/ # Miniflare local state
 .wrangler/ # Wrangler config, cache, and local dev state
-# /.wrangler/tmp/ # Already covered by .wrangler/
 
 # Local D1 development databases (Wrangler creates these in .wrangler/state/d1)
 # .d1/ # This might be redundant if .wrangler/ covers it, but explicit can be good.
@@ -96,7 +95,7 @@ playwright/.auth/ # Stores authentication state for tests
 # IMPORTANT: *.mojo and *.🔥 are typically Mojo SOURCE files.
 # If your Mojo source files are in `src/mojo/`, they should be version controlled.
 # DO NOT ignore them if they are source code.
-# The following lines would ignore source files. Remove them if .mojo/.🔥 are your sources.
+# Ensure the following lines are commented out or removed if .mojo/.🔥 are your sources.
 # *.mojo
 # *.🔥
 
@@ -116,8 +115,3 @@ playwright/.auth/ # Stores authentication state for tests
 # *.sqlite
 # *.sqlite3
 # properaccount-dev.db # Example if you have a specific local dev db file
-# Build artifacts
-.astro/
-.DS_Store
-dist/
-.wrangler/

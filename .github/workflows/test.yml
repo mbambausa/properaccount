@@ -1,0 +1,43 @@
+# .github/workflows/test.yml
+name: Run Tests and Linters
+
+on:
+  push:
+    branches:
+      - main # Run on pushes to main
+      - '*'   # Run on pushes to any other branch
+  pull_request:
+    branches:
+      - main # Also run on PRs targeting main (can be redundant if deploy-preview covers this, but good for explicitness)
+
+jobs:
+  test-and-lint:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22 # Consistent with your project
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linters
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      # Optional: Upload Playwright report if tests fail or always
+      - name: Upload Playwright report
+        if: always() # Or use `if: failure()` to only upload on test failure
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7 # Keep reports for 7 days

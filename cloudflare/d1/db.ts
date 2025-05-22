@@ -51,10 +51,11 @@ class D1Client implements Database {
   async execute(sql: string, params: any[] = []): Promise<DbExecuteResult> {
     try {
       const statement = this.d1Instance.prepare(sql);
-      const result = await statement.bind(...params).run();
+      const result: D1Result = await statement.bind(...params).run(); // Explicitly type result
       
       return {
-        success: true,
+        success: result.success, // Use D1Result's success field
+        error: result.success ? undefined : (result.error || 'Unknown D1 execute error'), // Provide error if not successful
         meta: {
           duration: result.meta?.duration,
           changes: result.meta?.changes,
@@ -72,9 +73,10 @@ class D1Client implements Database {
 
   async batch(statements: D1PreparedStatement[]): Promise<DbExecuteResult[]> {
     try {
-      const results = await this.d1Instance.batch(statements);
+      const results: D1Result[] = await this.d1Instance.batch(statements); // Explicitly type results
       return results.map(result => ({
-        success: true,
+        success: result.success, // Use D1Result's success field for each statement
+        error: result.success ? undefined : (result.error || 'Unknown D1 batch statement error'), // Provide error if not successful
         meta: {
           duration: result.meta?.duration,
           changes: result.meta?.changes,
@@ -82,8 +84,7 @@ class D1Client implements Database {
         }
       }));
     } catch (error) {
-      console.error('D1 batch error:', error);
-      // Return results with error for all statements
+      console.error('D1 batch error (entire batch call failed):', error);
       return statements.map(() => ({
         success: false,
         error: error instanceof Error ? error.message : String(error)

@@ -10,11 +10,11 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     name TEXT,
-    password_hash TEXT,
+    password_hash TEXT, -- Nullable for OAuth-only users
     role TEXT NOT NULL DEFAULT 'user', -- 'user', 'admin'
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    verified_at INTEGER, -- When email was verified, null if unverified
+    verified_at INTEGER, -- Timestamp when email was verified, null if unverified
     image_url TEXT
 );
 
@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS verification_tokens (
     token TEXT NOT NULL,
     expires_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    type TEXT NOT NULL DEFAULT 'EMAIL_VERIFICATION', -- Added: e.g., 'EMAIL_VERIFICATION', 'PASSWORD_RESET'
     PRIMARY KEY (identifier, token)
 );
 

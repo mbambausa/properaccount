@@ -3,7 +3,7 @@ name: Deploy Preview
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main ] # Triggers on PRs targeting the main branch
 
 jobs:
   test:
@@ -12,14 +12,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v3
         with:
-          node-version: 22
+          node-version: 22 # Using Node.js v22, consistent with your package.json
           cache: 'npm'
-      - run: npm ci
+      - run: npm ci # Clean install, good for CI
       - run: npm run lint
-      - run: npm test
+      - run: npm test # Runs Playwright tests as defined in package.json
 
   deploy-preview:
-    needs: test
+    needs: test # Ensures tests pass before deploying a preview
     runs-on: ubuntu-latest
     name: Deploy to Preview
     steps:
@@ -35,5 +35,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy ./dist --project-name=properaccount --branch=${{ github.head_ref }}
-          wranglerVersion: '4.15.2'
+          command: pages deploy ./dist --project-name=properaccount --branch=${{ github.head_ref }} # Deploys PR branch to CF Pages
+          wranglerVersion: '4.16.0' # Updated to match your local wrangler version
