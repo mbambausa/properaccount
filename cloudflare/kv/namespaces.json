@@ -1,0 +1,7 @@
+[
+  {
+    "binding": "MY_KV_NAMESPACE",
+    "id": "your_kv_namespace_id_here",
+    "preview_id": "your_preview_kv_namespace_id_here"
+  }
+]

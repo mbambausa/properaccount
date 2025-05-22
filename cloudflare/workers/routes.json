@@ -1,0 +1,14 @@
+{
+  "routes": [
+    {
+      "pattern": "example.com/api/*",
+      "script": "api-worker",
+      "zone_name": "example.com"
+    },
+    {
+      "pattern": "another-example.com/assets/*",
+      "script": "assets-worker",
+      "zone_id": "your_zone_id_here"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "variables": {
+    "API_KEY": "your_api_key_here",
+    "DEBUG_MODE": "false"
+  },
+  "secrets": [
+    "DATABASE_PASSWORD_SECRET_NAME"
+  ],
+  "access_rules": [
+    {
+      "path_pattern": "/admin/*",
+      "allowed_ips": ["192.0.2.1", "2001:db8::1"],
+      "required_headers": [
+        {"header": "X-Admin-Token", "value_matches": "secure_token_.*"}
+      ]
+    }
+  ]
+}

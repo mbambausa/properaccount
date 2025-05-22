@@ -1,0 +1,7 @@
+[
+  {
+    "binding": "MY_R2_BUCKET",
+    "bucket_name": "your-r2-bucket-name-here",
+    "preview_bucket_name": "your-preview-r2-bucket-name-here"
+  }
+]
