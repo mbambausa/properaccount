@@ -1,6 +1,7 @@
 ---
 // src/components/accounting/EntityList.astro
-import type { DbEntity as Entity } from "../../db/schema"; 
+// REVISED: Corrected import path using tsconfig.json alias
+import type { DbEntity as Entity } from "@db/schema"; 
 
 interface Props {
   entities: Entity[];
@@ -26,6 +27,7 @@ function buildEntityHierarchy(
 ): HierarchicalEntity[] {
   const children: HierarchicalEntity[] = [];
   for (const entity of allEntities) {
+    // Ensure entity.parent_id is correctly compared (it can be null)
     if (entity.parent_id === parentId) {
       const hierarchicalEntity: HierarchicalEntity = {
         ...entity,
@@ -35,7 +37,8 @@ function buildEntityHierarchy(
       children.push(hierarchicalEntity);
     }
   }
-  return children.sort((a, b) => a.name.localeCompare(b.name));
+  // Ensure entity.name exists for sorting, provide fallback if necessary, though DbEntity should have it
+  return children.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
 const hierarchicalEntitiesToDisplay = buildEntityHierarchy(entities);
@@ -48,11 +51,10 @@ const formatBusinessTypeDisplay = (type?: string | null) => {
     .join(' ');
 };
 
-// Flatten the hierarchical structure for display
-function flattenHierarchy(entities: HierarchicalEntity[]): HierarchicalEntity[] {
+function flattenHierarchy(entitiesToFlatten: HierarchicalEntity[]): HierarchicalEntity[] {
   let result: HierarchicalEntity[] = [];
   
-  for (const entity of entities) {
+  for (const entity of entitiesToFlatten) {
     result.push(entity);
     if (entity.children && entity.children.length > 0) {
       result = result.concat(flattenHierarchy(entity.children));
@@ -173,14 +175,15 @@ const containerClasses = `entity-list-container ${showHierarchyInitial ? 'show-h
   
   /* Style for hierarchy indicators when active */
   .entity-list-container.show-hierarchy-active [data-depth="0"] {
-    font-weight: 500;
+    font-weight: 500; /* Example: Make top-level items bolder when hierarchy is shown */
   }
+  /* Add more specific styles for hierarchy indicators if needed */
 </style>
 
 <script>
-  // Additional client-side enhancements could go here
   document.addEventListener('DOMContentLoaded', () => {
-    // This would be a good place to add event listeners
-    // for expanding/collapsing hierarchical entities if needed
+    // Client-side enhancements like expand/collapse for hierarchy could be added here.
+    // For example, toggling the 'show-hierarchy-active' class on the container
+    // or managing individual row visibility based on parent state.
   });
 </script>

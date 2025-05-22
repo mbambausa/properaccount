@@ -12,67 +12,75 @@ import type {
   CfProperties,
   ExecutionContext,
 } from "@cloudflare/workers-types";
-import type { Session, User } from "./types/auth"; // Ensure Session and User types are imported
+import type { Session, User } from "./types/auth";
 
 // Defines the shape of Cloudflare bindings and secrets
 // available via `Astro.locals.runtime.env`.
 export interface CloudflareEnv {
-  // Cloudflare Service Bindings (ensure these match wrangler.toml bindings)
   DATABASE: D1Database;
   CONFIG_KV: KVNamespace;
   REPORT_CACHE_KV: KVNamespace;
-  SESSION_KV: KVNamespace;       // For custom session management
+  SESSION_KV: KVNamespace;
   DOCUMENTS_BUCKET: R2Bucket;
-  BACKGROUND_TASKS_QUEUE?: Queue; // Optional until Phase 3+
+  BACKGROUND_TASKS_QUEUE?: Queue;
 
-  // Secrets (set in Cloudflare dashboard or .dev.vars for local)
-  AUTH_SECRET: string;    // For Auth.js or similar
-  CSRF_SECRET: string;    // For CSRF protection logic
-  SESSION_SECRET: string; // For signing/encrypting custom session data
-  JWT_SECRET: string;     // For any custom JWT logic
+  AUTH_SECRET: string;
+  CSRF_SECRET: string;
+  SESSION_SECRET: string;
+  JWT_SECRET: string;
 
-  // OAuth Provider Secrets
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
 
-  // Environment identifier
   ENVIRONMENT: "development" | "production" | "staging" | string;
 }
+
+// Forward declaration for ToastSystem class used in Window interface
+// This avoids needing to import the actual class implementation here.
+interface ToastSystemInterface {
+  show: (
+    type: 'success' | 'error' | 'warning' | 'info',
+    message: string,
+    duration?: number
+  ) => string | null; // Assuming show returns toast ID or null
+  remove: (id: string) => void;
+  // Add other methods if ToastSystem has more public methods used globally
+}
+
 
 declare global {
   interface Window {
     Alpine?: AlpineType;
-    // Add the declaration for showToast
     showToast?: (
       type: 'success' | 'error' | 'info' | 'warning',
       message: string,
       duration?: number
-    ) => void;
-    // You also had window.toggleTheme in AuthLayout.astro, declare it too if not already.
+    ) => string | null; // Ensure return type matches what showToast actually returns
     toggleTheme?: () => void;
+    // Add the declaration for toastSystem
+    toastSystem?: ToastSystemInterface; // Use the interface defined above
   }
 
   namespace App {
     interface Locals {
       runtime: {
         env: CloudflareEnv;
-        cf?: CfProperties;          // Cloudflare request properties
-        ctx: ExecutionContext;       // Execution context (waitUntil, passThroughOnException)
+        cf?: CfProperties;
+        ctx: ExecutionContext;
       };
-      cspNonce?: string;            // For CSP nonces in headers/forms
-      user?: User;                  // Use imported User type
-      sessionId?: string;           // From custom session store
-      session?: Session;            // Use imported Session type
-      csrfToken?: string;           // To embed in forms
-      currentEntityId?: string;     // For tenant (multi-entity) middleware
+      cspNonce?: string;
+      user?: User;
+      sessionId?: string;
+      session?: Session;
+      csrfToken?: string;
+      currentEntityId?: string;
     }
   }
 }
 
-// Client-side environment variables (import.meta.env)
 interface ImportMetaEnv {
   readonly PUBLIC_APP_URL: string;
-  readonly PUBLIC_DEV_MODE?: string;     // "true" or "false"
+  readonly PUBLIC_DEV_MODE?: string;
   readonly NODE_ENV: "development" | "production" | "test";
   readonly PUBLIC_ENABLE_TOASTS?: string;
   readonly PUBLIC_DEFAULT_THEME?: "light" | "dark" | "system";
@@ -82,4 +90,4 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-export {}; // Ensure this file is treated as a module
+export {};

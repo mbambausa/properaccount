@@ -1,10 +1,12 @@
 ---
 // src/components/ui/ToastContainer.astro
+// This file remains as per the last correct version you had,
+// where the ARIA role was made dynamic.
+// The TypeScript errors about window.toastSystem are resolved by updating src/env.d.ts.
 ---
 
 <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-2 max-w-sm w-full sm:w-auto">
-  <!-- Toast items will be dynamically inserted here -->
-</div>
+  </div>
 
 <script>
   class ToastSystem {
@@ -18,7 +20,6 @@
         return;
       }
       
-      // Listen for custom toast events
       window.addEventListener('toast', ((event: CustomEvent) => {
         const { type, message, duration } = event.detail;
         this.show(type, message, duration);
@@ -29,30 +30,26 @@
       const id = 'toast-' + Date.now();
       const toast = this.createToastElement(id, type, message);
       
-      // Add with initial opacity 0
       toast.classList.add('opacity-0');
       this.container.appendChild(toast);
       
-      // Force reflow before transition
       void toast.offsetWidth;
       
-      // Fade in
       toast.classList.remove('opacity-0');
       
-      // Auto-remove after duration
       if (duration > 0) {
         const timeout = window.setTimeout(() => this.remove(id), duration);
         this.timeouts.set(id, timeout);
       }
       
-      return id;
+      return id; // show method returns the toast ID
     }
 
     remove(id: string) {
       const toast = document.getElementById(id);
       if (toast) {
         toast.classList.add('opacity-0');
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(() => toast.remove(), 300); 
         
         if (this.timeouts.has(id)) {
           window.clearTimeout(this.timeouts.get(id));
@@ -61,13 +58,14 @@
       }
     }
 
-    createToastElement(id: string, type: string, message: string) {
+    createToastElement(id: string, type: 'success' | 'error' | 'warning' | 'info', message: string) {
       const toast = document.createElement('div');
       toast.id = id;
       toast.className = 'rounded-md p-4 mb-4 flex items-start shadow-lg transition-opacity duration-300 w-full border-l-4';
-      toast.setAttribute('role', 'alert');
       
-      // Set styles based on type using HSL variables that match global.css
+      const anouncementRole = (type === 'error' || type === 'warning') ? 'alert' : 'status';
+      toast.setAttribute('role', anouncementRole);
+      
       const styles = {
         success: {
           container: 'bg-success/10 dark:bg-success/20 border-success',
@@ -87,15 +85,13 @@
         }
       };
       
-      const style = styles[type as keyof typeof styles] || styles.info;
+      const style = styles[type] || styles.info;
       toast.classList.add(...style.container.split(' '));
 
-      // Create icon element
       const icon = document.createElement('div');
       icon.className = 'flex-shrink-0 mr-3';
       icon.innerHTML = `<div class="${style.icon} h-5 w-5"></div>`;
 
-      // Message element
       const messageElement = document.createElement('div');
       messageElement.className = 'flex-1 pt-0.5';
       
@@ -105,14 +101,13 @@
       
       messageElement.appendChild(messageText);
       
-      // Close button
       const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
       closeBtn.className = 'ml-4 flex-shrink-0 inline-flex text-neutral-400 hover:text-neutral-500 dark:hover:text-neutral-300 transition-colors duration-150';
       closeBtn.setAttribute('aria-label', 'Close notification');
       closeBtn.innerHTML = '<div class="i-carbon-close h-4 w-4"></div>';
       closeBtn.addEventListener('click', () => this.remove(id));
       
-      // Assemble toast
       toast.appendChild(icon);
       toast.appendChild(messageElement);
       toast.appendChild(closeBtn);
@@ -121,18 +116,24 @@
     }
   }
 
-  // Initialize the toast system when the DOM is ready
   document.addEventListener('DOMContentLoaded', () => {
-    window.toastSystem = new ToastSystem();
+    if (!window.toastSystem) {
+      window.toastSystem = new ToastSystem();
+    }
   });
 
-  // Helper function to show toasts from anywhere
-  window.showToast = function(type, message, duration) {
-    if (window.toastSystem) {
-      return window.toastSystem.show(type, message, duration);
-    } else {
-      console.error('Toast system not initialized');
-      return null;
-    }
-  };
+  if (typeof window.showToast !== 'function') {
+    window.showToast = function(
+      type: 'success' | 'error' | 'warning' | 'info',
+      message: string,
+      duration?: number
+    ): string | null { // Ensure return type matches ToastSystem.show
+      if (window.toastSystem) {
+        return window.toastSystem.show(type, message, duration);
+      } else {
+        console.error('Toast system not initialized when showToast was called.');
+        return null;
+      }
+    };
+  }
 </script>

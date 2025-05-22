@@ -33,8 +33,8 @@ const {
 // Get current path for sidebar highlighting
 const currentPath = Astro.url.pathname;
 
-// For dynamic padding based on sidebar state (if sidebar can collapse)
-const sidebarWidthClass = 'lg:pl-[var(--sidebar-width)]'; // Uses CSS variable
+// REVISED: Use --current-sidebar-width which is dynamically set by Sidebar.astro's Alpine.js logic
+const sidebarPaddingClass = 'lg:pl-[var(--current-sidebar-width)]';
 
 // Content width classes map
 const contentWidthClasses = {
@@ -58,7 +58,6 @@ const contentWidthClasses = {
     <DebugTools />
   </head>
   <body class="h-full bg-neutral-50 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 antialiased">
-    <!-- Accessibility skip link -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-white dark:focus:bg-neutral-800 focus:text-primary-600 focus:top-0 focus:left-0">
       Skip to main content
     </a>
@@ -67,7 +66,11 @@ const contentWidthClasses = {
       <Sidebar user={user} currentPath={currentPath} />
 
       {/* Main content area - ID for potential JS targeting if sidebar collapses */}
-      <div id="main-content-area" class={`flex-1 flex flex-col ${sidebarWidthClass}`}>
+      {/* REVISED: Added transition-all for smooth padding adjustment */}
+      <div id="main-content-area" class:list={[
+        "flex-1 flex flex-col transition-all duration-300 ease-in-out",
+        sidebarPaddingClass
+      ]}>
         {showPageHeader && (
           <header class:list={[
             "sticky top-0 z-10 w-full h-[var(--header-height)] flex items-center justify-between px-4 lg:px-8 bg-white/75 dark:bg-neutral-800/75 backdrop-blur-md",

@@ -1,19 +1,19 @@
 ---
 // src/components/accounting/selectors/AccountSelector.astro
-import type { DbChartOfAccount, AccountSystemType } from "@db/schema";
+import type { DbChartOfAccount, AccountSystemTypeDb } from "@db/schema";
 
 interface Props {
-  accounts: DbChartOfAccount[]; // All available accounts to choose from
+  accounts: DbChartOfAccount[];
   selectedAccountId?: string | null;
-  name?: string; // HTML name attribute for the select input
+  name?: string;
   id?: string;
   required?: boolean;
   label?: string;
   placeholder?: string;
   disabled?: boolean;
-  filterByType?: AccountSystemType | AccountSystemType[]; // Optional filter by account type(s)
-  class?: string; // Additional classes for the select element
-  onCha?: string; // Alpine.js x-on:change handler string
+  filterByType?: AccountSystemTypeDb | AccountSystemTypeDb[]; // REVISED
+  class?: string;
+  onCha?: string;
 }
 
 const {
@@ -27,11 +27,11 @@ const {
   disabled = false,
   filterByType,
   class: customClass,
-  onCha, // Renamed to avoid conflict with Astro's onchange
+  onCha,
 } = Astro.props;
 
 const filteredAccounts = accounts.filter(acc => {
-  if (!acc.is_active) return false; // Always filter out inactive accounts from selector
+  if (acc.is_active === 0) return false; // Always filter out inactive accounts
   if (!filterByType) return true;
   if (Array.isArray(filterByType)) {
     return filterByType.includes(acc.type);
@@ -39,22 +39,21 @@ const filteredAccounts = accounts.filter(acc => {
   return acc.type === filterByType;
 });
 
-// Group by type for optgroups
 const accountsByType = filteredAccounts.reduce((acc, account) => {
-  const type = account.type;
-  if (!acc[type]) {
-    acc[type] = [];
+  const type = account.type; // type here is AccountSystemTypeDb
+  // Ensure the key is valid and initialize array if it's the first time
+  if (type && (orderedTypes as string[]).includes(type)) { // Check if type is one of the orderedTypes
+    (acc[type] = acc[type] || []).push(account);
   }
-  acc[type].push(account);
   return acc;
-}, {} as Record<AccountSystemType, DbChartOfAccount[]>);
+}, {} as Record<AccountSystemTypeDb, DbChartOfAccount[]>); // REVISED
 
-const orderedTypes: AccountSystemType[] = ["asset", "liability", "equity", "income", "expense"];
+const orderedTypes: AccountSystemTypeDb[] = ["asset", "liability", "equity", "income", "expense"]; // REVISED
 
-const baseClasses = "w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white disabled:bg-gray-100 disabled:cursor-not-allowed";
+const baseClasses = "w-full px-4 py-2.5 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 disabled:bg-gray-100 dark:disabled:bg-neutral-600 disabled:cursor-not-allowed";
 const finalClasses = `${baseClasses} ${customClass || ''}`;
 ---
-{label && <label for={id} class="block text-sm font-medium text-gray-700 mb-1.5">{label}{required && <span class="text-red-500">*</span>}</label>}
+{label && <label for={id} class="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1.5">{label}{required && <span class="text-red-500 ml-1">*</span>}</label>}
 <select
   name={name}
   id={id}
@@ -63,15 +62,21 @@ const finalClasses = `${baseClasses} ${customClass || ''}`;
   class={finalClasses}
   x-on:change={onCha}
 >
-  {placeholder && <option value="" disabled={required} selected={!selectedAccountId}>{placeholder}</option>}
+  {placeholder && <option value="" disabled={required && !selectedAccountId} selected={!selectedAccountId}>{placeholder}</option>}
   {orderedTypes.map(typeKey => {
     const typeAccounts = accountsByType[typeKey] || [];
-    if (typeAccounts.length === 0) return null;
+    if (typeAccounts.length === 0 && !(filterByType && (Array.isArray(filterByType) ? filterByType.includes(typeKey) : filterByType === typeKey))) {
+        // If filtering by type and this type has no accounts, don't render optgroup
+        // If not filtering by this specific type and it's empty, also don't render.
+        return null;
+    }
+    if (typeAccounts.length === 0 && !filterByType) return null; // Don't render empty optgroups if no filter
+
     return (
       <optgroup label={typeKey.charAt(0).toUpperCase() + typeKey.slice(1)}>
         {typeAccounts.map(account => (
           <option value={account.id} selected={selectedAccountId === account.id}>
-            {account.code} - {account.name}
+            {account.code} – {account.name}
           </option>
         ))}
       </optgroup>
