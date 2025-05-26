@@ -1,197 +1,213 @@
 // src/utils/feature-flags.ts
+/**
+ * WebAssembly support and feature flag utilities.
+ */
 
 /**
- * Interface defining WebAssembly support and feature detection results.
+ * Defines the structure for reporting basic WebAssembly support.
+ * For detailed Wasm feature detection (SIMD, threads, exceptions, etc.),
+ * a more specialized library or micro-feature tests would be required.
  */
-export interface WebAssemblySupport {
-  isSupported: boolean;
-  features: {
-    bulkMemory: boolean;
-    exceptions: boolean;
-    multiValue: boolean;
-    referenceTypes: boolean;
-    simd: boolean;
-    threads: boolean;
-    tailCall: boolean;
-  };
-  maxMemoryPages: number;
-  errorMessage?: string;
-  platform: {
-    name: string;
-    version?: string;
-    isSecureContext: boolean;
-  };
+export interface WebAssemblySupportInfo {
+  isSupported: boolean; // Basic WebAssembly compilation and instantiation support
+  isSecureContext: boolean; // Relevant for features like SharedArrayBuffer (threads)
+  platform: 'browser' | 'node' | 'worker' | 'unknown';
+  errorMessage?: string; // If basic support check fails
 }
 
 /**
- * Performs comprehensive detection of WebAssembly support and available features.
+ * Performs a basic check for WebAssembly support in the current environment.
+ * Does NOT perform exhaustive feature detection for advanced Wasm proposals.
  */
-export async function getWebAssemblySupport(): Promise<WebAssemblySupport> {
-  const result: WebAssemblySupport = {
+export async function getWebAssemblySupport(): Promise<WebAssemblySupportInfo> {
+  const info: WebAssemblySupportInfo = {
     isSupported: false,
-    features: {
-      bulkMemory: false, exceptions: false, multiValue: false,
-      referenceTypes: false, simd: false, threads: false, tailCall: false,
-    },
-    maxMemoryPages: 0,
-    platform: {
-        name: typeof window !== 'undefined' ? 'browser' : (typeof process !== 'undefined' && process.env && process.versions?.node ? 'node' : 'unknown'),
-        isSecureContext: typeof window !== 'undefined' ? window.isSecureContext : true,
-    }
+    isSecureContext: typeof window !== 'undefined' ? window.isSecureContext : true, // Assume secure for non-browser or default true
+    platform: 'unknown',
   };
 
+  if (typeof self !== 'undefined' && (self as any).DedicatedWorkerGlobalScope !== undefined) {
+    info.platform = 'worker';
+  } else if (typeof window !== 'undefined') {
+    info.platform = 'browser';
+  } else if (typeof process !== 'undefined' && process.versions?.node) {
+    info.platform = 'node';
+  }
+  
   if (typeof WebAssembly !== 'object' || WebAssembly === null) {
-    result.errorMessage = 'WebAssembly global object not found.';
-    return result;
+    info.errorMessage = 'WebAssembly global object not found.';
+    return info;
   }
   if (typeof WebAssembly.compile !== 'function' || typeof WebAssembly.instantiate !== 'function') {
-    result.errorMessage = 'Basic WebAssembly compile/instantiate functions not supported.';
-    return result;
+    info.errorMessage = 'Basic WebAssembly compile/instantiate functions not supported.';
+    return info;
   }
 
   try {
-    const module = await WebAssembly.compile(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]));
+    // A minimal valid Wasm module: (module)
+    const minimalWasmModule = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    const module = await WebAssembly.compile(minimalWasmModule);
     await WebAssembly.instantiate(module);
-    result.isSupported = true;
+    info.isSupported = true;
   } catch (e: unknown) {
-    result.errorMessage = `Basic Wasm instantiation failed: ${e instanceof Error ? e.message : String(e)}`;
-    return result;
+    info.errorMessage = `Basic Wasm instantiation failed: ${e instanceof Error ? e.message : String(e)}`;
+    // isSupported remains false
   }
 
-  try {
-    const simdModule = new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,6,1,4,0,65,0,11]);
-    result.features.simd = WebAssembly.validate(simdModule);
-  } catch (e) { result.features.simd = false; }
-
-  result.features.threads = typeof SharedArrayBuffer === 'function' && result.platform.isSecureContext === true;
-  if (result.features.threads) {
-    try {
-      const threadModule = new Uint8Array([0,97,115,109,1,0,0,0,1,4,1,96,0,0,5,3,1,0,1]);
-      await WebAssembly.compile(threadModule);
-    } catch (e) {
-      result.features.threads = false;
-    }
-  }
-
-  result.features.bulkMemory = result.isSupported;
-  result.features.referenceTypes = result.isSupported;
-  result.features.multiValue = result.isSupported;
-  result.features.exceptions = false;
-  result.features.tailCall = false;
-  result.maxMemoryPages = 1024;
-
-  return result;
+  return info;
 }
 
 /**
  * Interface defining the shape of the feature flags for Mojo functionality.
+ * These flags might control whether certain computationally intensive tasks
+ * attempt to use Mojo (Wasm) implementations or fall back to JavaScript.
  */
 export interface MojoFeatureFlags {
-  useMojoBigDecimal: boolean;
-  preferJSImplementation: boolean;
+  useMojoBigDecimal: boolean;       // Example: Use Mojo for high-precision decimal math
+  preferJSImplementation: boolean;  // Fallback flag: if true, prefer JS even if Mojo is available
   enableMojoTaxEngine: boolean;
   enableMojoReportingEngine: boolean;
   enableMojoBatchProcessor: boolean;
   enableMojoLoanEngine: boolean;
-  debugMode: boolean;
+  debugMode: boolean;               // Enable verbose logging or diagnostics for Mojo modules
+  // Advanced Wasm features - flags to enable experimental Mojo builds using these.
+  // Actual support should be checked separately if critical for a specific Mojo module.
   simdOptimizations: boolean;
   threadOptimizations: boolean;
-  maxMemoryBudgetMB: number;
+  maxMemoryBudgetMB: number;        // Informational budget for Mojo Wasm modules
 }
 
 let cachedFeatureFlags: MojoFeatureFlags | null = null;
+const FEATURE_FLAGS_LOCAL_STORAGE_KEY = 'properAccountMojoFeatureFlags';
 
-// FIXED: Parameter order and logic revised.
-// envKey is the NAME of the environment variable.
-// settingValue is the value from localStorage (optional).
-// defaultValue is the ultimate fallback.
+/**
+ * Retrieves a boolean setting.
+ * Order of precedence:
+ * 1. Environment variable (server-side/build-time: process.env.YOUR_VAR; client-side build-time: import.meta.env.PUBLIC_YOUR_VAR).
+ * 2. Value from localStorage (user override).
+ * 3. Default value.
+ * @param envKey The key for the environment variable. For client-side access via `import.meta.env`, it must be prefixed `PUBLIC_`.
+ * @param defaultValue The default boolean value.
+ * @param localStorageValue Optional value retrieved from localStorage.
+ */
 function getBooleanSetting(
   envKey: string,
   defaultValue: boolean,
-  settingValue?: boolean // This value comes from localStorage, can be undefined
+  localStorageValue?: boolean 
 ): boolean {
-  // 1. Check environment variables (server-side or build-time)
-  const envValue = typeof process !== 'undefined' && process.env ? process.env[envKey] : undefined;
+  // Check environment variables
+  // Server-side (Node.js in Worker) or build-time for non-PUBLIC_ vars
+  const processEnvValue = (typeof process !== 'undefined' && process.env) ? process.env[envKey] : undefined;
+  // Client-side (for PUBLIC_ prefixed vars available via import.meta.env)
+  const importMetaEnvValue = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env as any)[envKey] : undefined;
+  
+  const envValue = processEnvValue !== undefined ? processEnvValue : importMetaEnvValue;
+
   if (envValue !== undefined) {
-    const envLower = envValue.toLowerCase();
+    const envLower = String(envValue).toLowerCase();
     if (envLower === 'true' || envLower === '1' || envLower === 'yes') return true;
     if (envLower === 'false' || envLower === '0' || envLower === 'no') return false;
   }
-  // 2. Check value from settings (localStorage)
-  if (typeof settingValue === 'boolean') {
-    return settingValue;
+  
+  // Check value from localStorage
+  if (typeof localStorageValue === 'boolean') {
+    return localStorageValue;
   }
-  // 3. Fall back to default
+  
+  // Fall back to default
   return defaultValue;
 }
 
-// FIXED: Parameter order and logic revised.
+/**
+ * Retrieves a numeric setting.
+ * Order of precedence: Environment variable -> localStorage -> default.
+ * @param envKey The key for the environment variable.
+ * @param defaultValue The default numeric value.
+ * @param localStorageValue Optional value retrieved from localStorage.
+ */
 function getNumericSetting(
   envKey: string,
   defaultValue: number,
-  settingValue?: number // This value comes from localStorage, can be undefined
+  localStorageValue?: number
 ): number {
-  // 1. Check environment variables
-  const envValue = typeof process !== 'undefined' && process.env ? process.env[envKey] : undefined;
+  const processEnvValue = (typeof process !== 'undefined' && process.env) ? process.env[envKey] : undefined;
+  const importMetaEnvValue = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env as any)[envKey] : undefined;
+  const envValue = processEnvValue !== undefined ? processEnvValue : importMetaEnvValue;
+
   if (envValue !== undefined) {
-    const parsed = parseInt(envValue, 10);
+    const parsed = parseInt(String(envValue), 10);
     if (!isNaN(parsed)) return parsed;
   }
-  // 2. Check value from settings (localStorage)
-  if (typeof settingValue === 'number' && !isNaN(settingValue)) {
-    return settingValue;
+  
+  if (typeof localStorageValue === 'number' && !isNaN(localStorageValue)) {
+    return localStorageValue;
   }
-  // 3. Fall back to default
+  
   return defaultValue;
 }
 
+/**
+ * Gets the current feature flags, from cache, localStorage, environment variables, or defaults.
+ * Note: For server-side Mojo (in Workers), flags would typically be determined from `CloudflareEnv` (secrets/vars).
+ * localStorage is primarily for client-side overrides or development toggles.
+ */
 export function getFeatureFlags(): MojoFeatureFlags {
   if (cachedFeatureFlags) {
     return { ...cachedFeatureFlags };
   }
 
-  let settings: Partial<MojoFeatureFlags> = {};
+  let settingsFromLocalStorage: Partial<MojoFeatureFlags> = {};
   if (typeof localStorage !== 'undefined') {
     try {
-      const storedSettings = localStorage.getItem('properAccountMojoFeatureFlags');
+      const storedSettings = localStorage.getItem(FEATURE_FLAGS_LOCAL_STORAGE_KEY);
       if (storedSettings) {
-        settings = JSON.parse(storedSettings);
+        settingsFromLocalStorage = JSON.parse(storedSettings);
       }
-    } catch (e) { console.warn("Could not parse feature flags from localStorage", e); }
+    } catch (e) { console.warn("Could not parse Mojo feature flags from localStorage", e); }
   }
 
-  // FIXED: Pass the ENV_KEY name directly to the helper functions.
+  // Ensure environment variable keys match what's set (e.g. PUBLIC_MOJO_DEBUG_MODE for client-side Vite)
   cachedFeatureFlags = {
-    useMojoBigDecimal: getBooleanSetting('MOJO_USE_BIG_DECIMAL', true, settings.useMojoBigDecimal),
-    preferJSImplementation: getBooleanSetting('MOJO_PREFER_JS', false, settings.preferJSImplementation),
-    enableMojoTaxEngine: getBooleanSetting('MOJO_ENABLE_TAX_ENGINE', true, settings.enableMojoTaxEngine),
-    enableMojoReportingEngine: getBooleanSetting('MOJO_ENABLE_REPORTING_ENGINE', true, settings.enableMojoReportingEngine),
-    enableMojoBatchProcessor: getBooleanSetting('MOJO_ENABLE_BATCH_PROCESSOR', true, settings.enableMojoBatchProcessor),
-    enableMojoLoanEngine: getBooleanSetting('MOJO_ENABLE_LOAN_ENGINE', true, settings.enableMojoLoanEngine),
-    debugMode: getBooleanSetting('MOJO_DEBUG_MODE', false, settings.debugMode),
-    simdOptimizations: getBooleanSetting('MOJO_SIMD_OPTIMIZATIONS', true, settings.simdOptimizations),
-    threadOptimizations: getBooleanSetting('MOJO_THREAD_OPTIMIZATIONS', true, settings.threadOptimizations),
-    maxMemoryBudgetMB: getNumericSetting('MOJO_MAX_MEMORY_MB', 64, settings.maxMemoryBudgetMB),
+    useMojoBigDecimal: getBooleanSetting('PUBLIC_MOJO_USE_BIG_DECIMAL', true, settingsFromLocalStorage.useMojoBigDecimal),
+    preferJSImplementation: getBooleanSetting('PUBLIC_MOJO_PREFER_JS', false, settingsFromLocalStorage.preferJSImplementation),
+    enableMojoTaxEngine: getBooleanSetting('PUBLIC_MOJO_ENABLE_TAX_ENGINE', true, settingsFromLocalStorage.enableMojoTaxEngine),
+    enableMojoReportingEngine: getBooleanSetting('PUBLIC_MOJO_ENABLE_REPORTING_ENGINE', true, settingsFromLocalStorage.enableMojoReportingEngine),
+    enableMojoBatchProcessor: getBooleanSetting('PUBLIC_MOJO_ENABLE_BATCH_PROCESSOR', true, settingsFromLocalStorage.enableMojoBatchProcessor),
+    enableMojoLoanEngine: getBooleanSetting('PUBLIC_MOJO_ENABLE_LOAN_ENGINE', true, settingsFromLocalStorage.enableMojoLoanEngine),
+    debugMode: getBooleanSetting('PUBLIC_MOJO_DEBUG_MODE', import.meta.env.DEV, settingsFromLocalStorage.debugMode), // Default debugMode to DEV status
+    simdOptimizations: getBooleanSetting('PUBLIC_MOJO_SIMD_OPTIMIZATIONS', true, settingsFromLocalStorage.simdOptimizations),
+    threadOptimizations: getBooleanSetting('PUBLIC_MOJO_THREAD_OPTIMIZATIONS', true, settingsFromLocalStorage.threadOptimizations),
+    maxMemoryBudgetMB: getNumericSetting('PUBLIC_MOJO_MAX_MEMORY_MB', 64, settingsFromLocalStorage.maxMemoryBudgetMB),
   };
   return { ...cachedFeatureFlags };
 }
 
+/**
+ * Updates specific feature flags and persists them to localStorage if available.
+ * @param newFlags A partial object of MojoFeatureFlags to update.
+ * @returns The new complete set of feature flags.
+ */
 export function updateFeatureFlags(newFlags: Partial<MojoFeatureFlags>): MojoFeatureFlags {
-  const currentFlags = cachedFeatureFlags || getFeatureFlags();
+  const currentFlags = cachedFeatureFlags || getFeatureFlags(); // Ensure currentFlags is initialized
   cachedFeatureFlags = { ...currentFlags, ...newFlags };
 
   if (typeof localStorage !== 'undefined') {
     try {
-      localStorage.setItem('properAccountMojoFeatureFlags', JSON.stringify(cachedFeatureFlags));
-    } catch (e) { console.warn("Could not save feature flags to localStorage", e); }
+      localStorage.setItem(FEATURE_FLAGS_LOCAL_STORAGE_KEY, JSON.stringify(cachedFeatureFlags));
+    } catch (e) { console.warn("Could not save Mojo feature flags to localStorage", e); }
   }
   return { ...cachedFeatureFlags };
 }
 
+/**
+ * Resets feature flags to their default values (determined by env vars and then hardcoded defaults)
+ * and clears them from localStorage.
+ * @returns The reset feature flags.
+ */
 export function resetFeatureFlags(): MojoFeatureFlags {
-  cachedFeatureFlags = null;
+  cachedFeatureFlags = null; // Clear memory cache
   if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('properAccountMojoFeatureFlags');
+    localStorage.removeItem(FEATURE_FLAGS_LOCAL_STORAGE_KEY);
   }
-  return getFeatureFlags();
+  return getFeatureFlags(); // Re-initialize from ENV and defaults
 }

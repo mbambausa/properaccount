@@ -1,47 +1,17 @@
 /* src/styles/global.css */
 /**
  * ProperAccount Global Styles
- * 
- * This file contains global styles and CSS variables.
+ * * This file contains global styles and CSS variables.
  * Most utility classes are handled by UnoCSS, so this file focuses on
- * base styles, theme variables, and global defaults.
+ * base styles, theme variables (used by UnoCSS theme config), and global defaults.
+ * Color HSL values are defined in uno.config.ts preflights and referenced here via var().
  */
 
-/* Import fonts (optional - you could use Google Fonts or local fonts) */
+/* Import fonts (Consider Astro's Font API for local hosting/optimization if preferred) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* Theme Variables - UPDATED to use HSL values for compatibility with UnoCSS */
+/* Global Design Tokens (Can be used by UnoCSS shortcuts or custom CSS) */
 :root {
-  /* Colors - Primary (Blue) - Converted from HEX to HSL */
-  --color-primary-50: 213 100% 97%;
-  --color-primary-100: 214 95% 93%;
-  --color-primary-200: 213 93% 87%;
-  --color-primary-300: 212 96% 78%;
-  --color-primary-400: 213 94% 68%;
-  --color-primary-500: 217 91% 60%;
-  --color-primary-600: 221 83% 53%;
-  --color-primary-700: 224 76% 48%;
-  --color-primary-800: 226 71% 40%;
-  --color-primary-900: 224 64% 33%;
-  --color-primary-950: 226 57% 21%;
-
-  /* Colors - Gray/Neutral - Converted from HEX to HSL */
-  --color-neutral-50: 0 0% 98%;
-  --color-neutral-100: 0 0% 96%;
-  --color-neutral-200: 0 0% 90%;
-  --color-neutral-300: 0 0% 83%;
-  --color-neutral-400: 0 0% 64%;
-  --color-neutral-500: 0 0% 45%;
-  --color-neutral-600: 0 0% 32%;
-  --color-neutral-700: 0 0% 25%;
-  --color-neutral-800: 0 0% 15%;
-  --color-neutral-900: 0 0% 9%;
-  --color-neutral-950: 0 0% 4%;
-
-  /* Financial colors - Converted to HSL */
-  --color-success: 158 64% 40%; /* Green for positive numbers */
-  --color-danger: 0 84% 60%;    /* Red for negative numbers */
-
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
@@ -63,7 +33,7 @@
   --z-tooltip: 60;
 }
 
-/* Dark mode variables */
+/* Dark mode shadow overrides */
 html.dark {
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.25);
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
@@ -73,7 +43,7 @@ html.dark {
 
 /* Base Element Styles */
 html {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', sans-serif; /* This should match uno.config.ts theme.fontFamily.sans */
   color-scheme: light dark;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
@@ -82,39 +52,46 @@ html {
 
 body {
   min-height: 100vh;
-  background-color: var(--color-neutral-50);
-  color: var(--color-neutral-900);
+  /* Colors are sourced from variables defined in uno.config.ts preflights */
+  background-color: hsl(var(--color-neutral-50)); 
+  color: hsl(var(--color-neutral-900));
   line-height: 1.5;
 }
 
-/* Default dark mode */
+/* Default dark mode body styles */
 html.dark body {
-  background-color: var(--color-neutral-900);
-  color: var(--color-neutral-50);
+  background-color: hsl(var(--color-neutral-900));
+  color: hsl(var(--color-neutral-50));
 }
 
-/* Financial Number Formatting */
+/* Financial Number Formatting - Classes to be applied where needed */
+/* These reference color variables defined in uno.config.ts preflights */
 .positive-amount {
-  color: var(--color-success);
+  color: hsl(var(--color-success)); /* Use HSL vars from UnoCSS preflights */
 }
 
 .negative-amount {
-  color: var(--color-danger);
+  color: hsl(var(--color-danger)); /* Use HSL vars from UnoCSS preflights */
 }
 
-/* Tabular Numbers for Financial Data */
+/* Tabular Numbers for Financial Data.
+  UnoCSS can also provide this via a shortcut or utility if preferred.
+  e.g., in uno.config.ts shortcuts: { 'nums-tabular': 'font-variant-numeric-tabular-nums font-feature-settings-tnum' }
+  Then use class="nums-tabular".
+*/
 .tabular-nums {
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+  font-feature-settings: "tnum"; /* More compatible way to set tnum */
 }
 
 /* Focus styles for keyboard navigation */
+/* Consider coordinating this with UnoCSS focus ring utilities for consistency */
 :focus-visible {
-  outline: 2px solid var(--color-primary-500);
+  outline: 2px solid hsl(var(--color-primary-500)); /* Use HSL var */
   outline-offset: 2px;
 }
 
-/* Common patterns */
+/* Common patterns for scrollbars */
 .scrollbar-hide {
   /* Firefox */
   scrollbar-width: none;
@@ -127,39 +104,41 @@ html.dark body {
   display: none;
 }
 
-/* Improve default scrollbar appearance */
+/* Custom scrollbar appearance (optional, if you want to override browser defaults) */
+/* These also use HSL vars defined in UnoCSS preflights */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background-color: var(--color-neutral-100);
+  background-color: hsl(var(--color-neutral-100));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: var(--color-neutral-300);
+  background-color: hsl(var(--color-neutral-300));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-neutral-400);
+  background-color: hsl(var(--color-neutral-400));
 }
 
 html.dark ::-webkit-scrollbar-track {
-  background-color: var(--color-neutral-800);
+  background-color: hsl(var(--color-neutral-800));
 }
 
 html.dark ::-webkit-scrollbar-thumb {
-  background-color: var(--color-neutral-600);
+  background-color: hsl(var(--color-neutral-600));
 }
 
 html.dark ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-neutral-500);
+  background-color: hsl(var(--color-neutral-500));
 }
 
-/* Animations */
+/* Animations - Prefer using UnoCSS animation utilities if possible */
+/* Example: class="animate-fade-in" could be an UnoCSS shortcut */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -168,34 +147,18 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 .animate-fade-in {
   animation: fadeIn 0.2s ease-in-out;
 }
+/* Note: 'animate-spin' is typically provided by UnoCSS presets. Remove custom @keyframes spin and .animate-spin if using UnoCSS's version. */
 
-/* Loading spinner animation */
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-/* Helper class for visually hidden but screen-reader accessible elements */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
+/* .sr-only class is provided by UnoCSS (e.g. presetMini or presetUno). 
+  Use the UnoCSS utility class directly in your HTML/components.
+  Example: <div class="sr-only">Hidden but accessible text</div>
+*/
 
 /* Print styles */
 @media print {
   body {
-    background-color: white !important;
-    color: black !important;
+    background-color: white !important; /* Standard print background */
+    color: black !important; /* Standard print text color */
   }
   
   .no-print {
@@ -207,7 +170,6 @@ html.dark ::-webkit-scrollbar-thumb:hover {
     max-width: 100% !important;
   }
   
-  /* Ensure tabular numbers for financial data in print */
   .tabular-nums {
     font-variant-numeric: tabular-nums !important;
   }

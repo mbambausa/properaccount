@@ -1,35 +1,40 @@
 // tsconfig.json
 {
-  "extends": "astro/tsconfigs/strict",
+  "extends": "astro/tsconfigs/strict", // Good baseline, enables many strict checks
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "esModuleInterop": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "useUnknownInCatchVariables": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "useDefineForClassFields": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noPropertyAccessFromIndexSignature": true,
+    // Target modern JavaScript, suitable for Cloudflare Workers and modern browsers
+    "target": "ES2022", 
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"], // Ensure all necessary libs are included
+    "module": "ESNext", // Use modern ES modules
+    // Recommended for modern Node.js/bundler environments; aligns with Vite
+    "moduleResolution": "bundler", 
+    "resolveJsonModule": true, // Allows importing JSON files
+    "isolatedModules": true, // Ensures each file can be transpiled independently
+    "esModuleInterop": true, // Improves compatibility between CommonJS and ES modules
+    // Recommended over `esModuleInterop` for stricter ESM compliance when module is ESNext
+    "verbatimModuleSyntax": true, 
+    "noEmit": true, // TypeScript only performs type checking, Astro/Vite handles transpilation
+    "useUnknownInCatchVariables": true, // Good practice: forces type checking in catch blocks
+    "alwaysStrict": true, // Ensures 'use strict' is emitted and code is parsed in strict mode
+    "noUnusedLocals": true, // Helps catch dead code
+    "noUnusedParameters": true, // Helps catch dead code
+    "noImplicitReturns": true, // Ensures all code paths in a function return a value if one is expected
+    "noFallthroughCasesInSwitch": true, // Prevents accidental fall-through in switch statements
+    "forceConsistentCasingInFileNames": true, // Important for case-sensitive file systems
+    "skipLibCheck": true, // Speeds up compilation by skipping d.ts file checks (generally safe for libraries)
+    "useDefineForClassFields": true, // Aligns with modern ECMAScript class field semantics
+    "noUncheckedIndexedAccess": true, // Adds undefined to types when accessing arrays/objects via index, enhancing safety
+    "exactOptionalPropertyTypes": true, // Stricter checking for optional properties
+    // "noPropertyAccessFromIndexSignature": true, // Consider if you want this stricter check
+
+    // Types to include globally for your environment
     "types": [
-      "@cloudflare/workers-types",
-      "@types/alpinejs",
-      "astro/client"
+      "@cloudflare/workers-types", // Essential for Cloudflare Workers development
+      "@types/alpinejs",          // For Alpine.js
+      "astro/client"              // Astro client-side types
     ],
-    "baseUrl": ".",
-    "paths": {
+    "baseUrl": ".", // Base directory for path aliases
+    "paths": { // Must be consistent with Vite aliases in astro.config.mjs
       "@/*": ["src/*"],
       "@components/*": ["src/components/*"],
       "@layouts/*": ["src/components/layout/*"],
@@ -40,8 +45,8 @@
       "@content/*": ["src/content/*"],
       "@db/*": ["cloudflare/d1/*"]
     },
-    "jsx": "preserve",
-    "jsxImportSource": "astro"
+    "jsx": "preserve", // Astro handles JSX transformation
+    "jsxImportSource": "astro" // Specifies JSX import source for Astro
   },
   "include": [
     "src/**/*.d.ts",
@@ -49,18 +54,19 @@
     "src/**/*.astro",
     "tests/**/*.ts",
     "cloudflare/**/*.ts",
-    "scripts/**/*.js",
+    "scripts/**/*.js", // Include JS scripts if you want TS to be aware of them (or check them with allowJs/checkJs)
+    "scripts/generate-types.ts", // Explicitly include TS scripts
     "*.config.ts",
     "*.config.mjs",
     "*.config.js"
   ],
   "exclude": [
     "node_modules",
-    ".astro",
-    "dist",
-    ".wrangler",
-    ".mf",
+    ".astro", // Astro's build cache
+    "dist", // Build output
+    ".wrangler", // Wrangler's local state
+    ".mf", // Miniflare directory (if used directly)
     ".DS_Store",
-    "public/mojo/**/*.wasm"
+    "public/mojo/**/*.wasm" // Exclude WASM files in public from TS compilation
   ]
 }

@@ -1,313 +1,363 @@
 // src/types/calculations.d.ts
 /**
- * Real estate financial calculations and metrics
+ * Defines TypeScript interfaces for real estate financial calculations,
+ * investment analysis, operating metrics, and loan-related computations.
  */
 
 // Property valuation metrics
 export interface CapitalizationRate {
   netOperatingIncome: number;
   propertyValue: number;
-  rate: number; // NOI / Property Value
+  /** Capitalization Rate (NOI / Property Value) as a decimal (e.g., 0.08 for 8%). */
+  rate: number;
 }
 
 export interface CashOnCashReturn {
   annualPreTaxCashFlow: number;
   totalCashInvested: number;
-  rate: number; // Annual Cash Flow / Total Cash Invested
+  /** Cash-on-Cash Return rate (Annual Pre-Tax Cash Flow / Total Cash Invested) as a decimal. */
+  rate: number;
 }
 
 export interface GrossRentMultiplier {
   propertyPrice: number;
   annualGrossRentalIncome: number;
-  multiplier: number; // Price / Annual Gross Rent
+  /** Gross Rent Multiplier (Property Price / Annual Gross Rental Income). */
+  multiplier: number;
 }
 
 export interface DebtServiceCoverageRatio {
   netOperatingIncome: number;
-  totalDebtService: number;
-  ratio: number; // NOI / Total Debt Service
+  totalDebtService: number; // Annual principal and interest payments
+  /** DSCR (NOI / Total Debt Service). */
+  ratio: number;
 }
 
 export interface InternalRateOfReturn {
-  initialInvestment: number;
+  initialInvestment: number; // Typically a negative value
   cashFlows: Array<{
     year: number;
     amount: number;
   }>;
-  holdingPeriod: number;
-  terminalValue: number;
-  irr: number; // percentage
+  holdingPeriodYears: number;
+  terminalValue?: number; // Expected sale price or residual value at end of holding period
+  /** Internal Rate of Return as a decimal (e.g., 0.12 for 12%). */
+  irr: number;
 }
 
-// Operating metrics
+// Operating metrics for a property
 export interface PropertyOperatingMetrics {
-  propertyId: string;
-  period: { start: number; end: number };
-  
+  propertyId: string; // UUID
+  period: {
+    /** Unix timestamp (seconds) for the start of the period. */
+    start: number;
+    /** Unix timestamp (seconds) for the end of the period. */
+    end: number;
+  };
+
   // Income metrics
   grossPotentialRent: number;
-  vacancy: number;
-  effectiveGrossIncome: number;
-  otherIncome: number;
-  totalIncome: number;
-  
+  vacancyAndCreditLoss: number; // Renamed for clarity from 'vacancy'
+  effectiveGrossIncome: number; // Gross Potential Rent - Vacancy & Credit Loss
+  otherIncome: number; // e.g., laundry, parking, application fees
+  totalRevenue: number; // Effective Gross Income + Other Income (renamed from totalIncome)
+
   // Expense metrics
-  operatingExpenses: number;
-  capitalExpenses: number;
-  totalExpenses: number;
-  
-  // Key ratios
-  netOperatingIncome: number;
-  operatingExpenseRatio: number; // OpEx / Effective Gross Income
-  breakEvenRatio: number; // (OpEx + Debt Service) / Gross Potential Rent
-  
-  // Per unit metrics (if multi-unit)
-  incomePerUnit?: number;
-  expensePerUnit?: number;
-  noiPerUnit?: number;
+  operatingExpenses: number; // Does not include debt service or capital expenditures
+  capitalExpenditures?: number; // Optional, as sometimes analyzed separately
+  totalExpenses: number; // Sum of operating and potentially other direct property expenses
+
+  // Key results & ratios
+  netOperatingIncome: number; // Total Revenue - Operating Expenses
+  /** Operating Expense Ratio (OpEx / Effective Gross Income) as a decimal. */
+  operatingExpenseRatio: number;
+  /** Break-Even Ratio ((OpEx + Debt Service) / Gross Potential Rent) as a decimal. */
+  breakEvenRatio?: number; // May require debt service data
+
+  // Per unit metrics (if applicable, for multi-unit properties)
+  averageIncomePerUnit?: number;
+  averageExpensePerUnit?: number;
+  averageNoiPerUnit?: number;
+  unitCount?: number; // Number of units used for per-unit calculations
 }
 
-// Rent analysis
+// Rent comparable for market analysis
 export interface RentComparable {
   address: string;
-  distance: number; // miles from subject property
-  propertyType: string;
-  yearBuilt: number;
+  /** Distance in preferred unit (e.g., miles or km) from the subject property. */
+  distance?: number;
+  propertyType: string; // e.g., "Apartment", "Single-Family Home"
+  yearBuilt?: number;
   bedrooms: number;
-  bathrooms: number;
-  squareFootage: number;
-  amenities: string[];
-  
+  bathrooms: number; // e.g., 1, 1.5, 2
+  squareFootage?: number;
+  amenities?: string[];
+
   // Rent data
   monthlyRent: number;
-  rentPerSqFt: number;
-  lastLeaseDate: number;
-  
-  // Adjustments
-  adjustments: Array<{
-    factor: string;
-    adjustment: number; // positive or negative
-    reason: string;
+  rentPerSqFt?: number; // Calculated: monthlyRent / squareFootage
+  /** Unix timestamp (seconds) of the last lease date for this comparable. */
+  lastLeaseDate?: number;
+
+  // Adjustments relative to the subject property
+  adjustments?: Array<{
+    factor: string; // e.g., "Condition", "View", "Amenities"
+    adjustmentAmount: number; // Monetary adjustment (positive or negative)
+    reason?: string;
   }>;
-  adjustedRent: number;
-  
-  // Source
-  source: 'mls' | 'rental_site' | 'property_manager' | 'public_record';
-  confidence: 'high' | 'medium' | 'low';
+  adjustedMonthlyRent?: number; // Rent after adjustments
+
+  // Source of comparable data
+  source?: 'mls' | 'rental_listing_site' | 'property_manager_data' | 'public_record' | 'appraisal';
+  confidence?: 'high' | 'medium' | 'low'; // Confidence in the accuracy of this comp
 }
 
 export interface RentAnalysis {
   subjectProperty: {
-    propertyId: string;
+    propertyId: string; // UUID
     address: string;
     currentRent?: number;
+    unitDescription?: string; // e.g., "2 bed, 1 bath"
   };
   comparables: RentComparable[];
-  
+
   // Analysis results
   suggestedRentRange: {
     low: number;
     high: number;
     recommended: number;
   };
-  averageRentPerSqFt: number;
-  medianRent: number;
-  confidenceScore: number;
-  
-  // Market factors
-  marketTrend: 'increasing' | 'stable' | 'decreasing';
+  averageAdjustedRentPerSqFt?: number;
+  medianAdjustedRent?: number;
+  /** Overall confidence in the rent analysis (0-1 or qualitative). */
+  confidenceScore?: number | 'high' | 'medium' | 'low';
+
+  // Market factors considered
+  marketTrend?: 'increasing' | 'stable' | 'decreasing';
+  /** Optional monetary adjustment based on seasonality. */
   seasonalAdjustment?: number;
-  
+
+  /** Unix timestamp (seconds) when the analysis was performed. */
   analysisDate: number;
-  validUntil: number;
+  /** Unix timestamp (seconds) until when this analysis is considered reasonably valid. */
+  validUntil?: number;
 }
 
-// Investment analysis
+// Investment analysis for a property
 export interface PropertyInvestmentAnalysis {
   property: {
-    id: string;
+    id: string; // UUID
     address: string;
     purchasePrice: number;
     closingCosts: number;
-    renovationCosts?: number;
+    initialRenovationCosts?: number; // Costs incurred at acquisition for renovation
   };
-  
+
   financing: {
     downPayment: number;
     loanAmount: number;
-    interestRate: number;
-    loanTerm: number; // years
-    monthlyPayment: number;
+    interestRate: number; // Annual interest rate as a decimal (e.g., 0.05 for 5%)
+    loanTermYears: number; // Loan term in years
+    monthlyPrincipalAndInterest: number; // P&I payment
+    loanPoints?: number;
+    otherLoanFees?: number;
   };
-  
+
+  // Projections, typically over a holding period (e.g., 5 or 10 years)
   projections: Array<{
     year: number;
-    
+
     // Income
-    grossRentalIncome: number;
+    grossScheduledRentalIncome: number;
     otherIncome: number;
-    vacancyLoss: number;
+    vacancyLossPercent: number; // As a decimal
     effectiveGrossIncome: number;
-    
+
     // Expenses
-    operatingExpenses: number;
-    debtService: number;
-    capitalExpenses: number;
-    
+    operatingExpenses: number; // Includes property tax, insurance, utilities, management, repairs
+    annualDebtService: number; // Total P&I for the year
+    capitalExpendituresYearly?: number; // Non-recurring large expenses
+
     // Cash flow
-    beforeTaxCashFlow: number;
-    taxableIncome: number;
-    taxLiability: number;
+    preTaxCashFlow: number; // EGI - OpEx - Debt Service - CapEx
+    estimatedTaxBenefitOrLiability: number; // From depreciation, interest deductions, etc.
     afterTaxCashFlow: number;
-    
-    // Equity
-    principalPaydown: number;
-    appreciation: number;
-    totalEquity: number;
+
+    // Equity & Value
+    principalPaydownInYear: number;
+    propertyValueAppreciationPercent?: number; // As a decimal
+    estimatedPropertyValueEndOfYear: number;
+    accumulatedEquity: number;
+    loanBalanceEndOfYear: number;
   }>;
-  
-  // Key metrics
-  metrics: {
-    capRate: number;
-    cashOnCashReturn: number;
-    totalROI: number;
-    irr: number;
-    dscr: number;
-    breakEvenRatio: number;
+
+  // Key summary metrics over the holding period
+  summaryMetrics: {
+    initialCapRate: number; // Based on purchase price and year 1 NOI
+    averageCashOnCashReturn: number; // Over holding period
+    totalReturnOnInvestment?: number; // (Total Cash Flow + Equity Gain) / Total Cash Invested
+    projectedIRR: number; // Internal Rate of Return
+    averageDSCR?: number; // Debt Service Coverage Ratio
+    averageOperatingExpenseRatio?: number;
+    paybackPeriodYears?: number;
   };
-  
-  // Sensitivity analysis
-  sensitivity?: {
-    rentIncrease: Record<string, number>; // % change -> new metric
-    vacancyRate: Record<string, number>;
-    interestRate: Record<string, number>;
-    expenseIncrease: Record<string, number>;
+
+  // Sensitivity analysis results (optional)
+  sensitivityAnalysis?: {
+    // Key: scenario description (e.g., "Rent +10%"), Value: new IRR or key metric
+    rentVariation?: Record<string, number>;
+    vacancyVariation?: Record<string, number>;
+    interestRateVariation?: Record<string, number>;
+    operatingExpenseVariation?: Record<string, number>;
+  };
+
+  assumptions?: {
+    holdingPeriodYears: number;
+    discountRateForNPV?: number; // For Net Present Value calculations
+    exitCapRate?: number; // For estimating sale price at end of holding period
+    incomeGrowthRatePercent?: number; // Annual growth
+    expenseGrowthRatePercent?: number; // Annual growth
   };
 }
 
-// Loan calculations
+// Loan amortization calculations
 export interface LoanAmortizationCalculation {
   principal: number;
-  interestRate: number;
+  annualInterestRate: number; // As a decimal, e.g., 0.05 for 5%
   termMonths: number;
+  /** Unix timestamp (seconds) for the first payment date or loan start date. */
   startDate: number;
-  
-  // Payment info
+
+  // Calculated payment info
   monthlyPayment: number;
-  totalInterest: number;
-  totalPayments: number;
-  
-  // Schedule
+  totalInterestPaid: number;
+  totalPrincipalAndInterestPaid: number; // Renamed from totalPayments for clarity
+
+  // Amortization schedule
   schedule: Array<{
     paymentNumber: number;
+    /** Unix timestamp (seconds) for this payment's due date. */
     paymentDate: number;
     beginningBalance: number;
-    scheduledPayment: number;
+    scheduledPaymentAmount: number; // Could be different from monthlyPayment if extra payments
     principalPayment: number;
     interestPayment: number;
     endingBalance: number;
-    cumulativeInterest: number;
-    cumulativePrincipal: number;
+    cumulativeInterestPaid: number;
+    cumulativePrincipalPaid: number;
   }>;
-  
-  // Early payoff scenarios
+
+  // Optional: Scenarios for early payoff
   earlyPayoffScenarios?: Array<{
     extraMonthlyPayment: number;
     newTermMonths: number;
-    interestSaved: number;
+    totalInterestSaved: number;
+    /** Unix timestamp (seconds) of the new payoff date. */
+    newPayoffDate: number;
   }>;
 }
 
-// Break-even analysis
+// Break-even analysis for a property
 export interface BreakEvenAnalysis {
-  propertyId: string;
-  
-  // Fixed costs
+  propertyId: string; // UUID
+
+  // Fixed costs (per period, e.g., monthly or annually)
   fixedCosts: {
-    mortgage: number;
-    insurance: number;
-    propertyTax: number;
-    hoa?: number;
-    other: number;
-    total: number;
+    mortgagePrincipalAndInterest: number;
+    propertyInsurance: number;
+    propertyTaxes: number;
+    hoaFees?: number;
+    otherFixed: number; // e.g., ثابت PM fees
+    totalFixedCosts: number;
   };
-  
-  // Variable costs
-  variableCosts: {
-    utilities?: number;
-    maintenance: number;
-    management?: number;
-    other: number;
-    total: number;
+
+  // Variable costs (often as a percentage of rent or per occupied unit)
+  variableCostsPerUnitOrPercentRent?: {
+    utilitiesIfLandlordPaid?: number; // Per unit per month
+    maintenancePercentOfRent?: number; // As a decimal
+    managementPercentOfRent?: number; // As a decimal
+    otherVariablePercentOfRent?: number; // As a decimal
   };
-  
+  averageVariableCostPerUnit?: number; // If calculated directly
+
   // Income
-  rentalIncome: number;
-  otherIncome?: number;
-  
+  averageRentPerUnit: number;
+  numberOfUnits: number;
+
   // Results
-  breakEvenOccupancy: number; // percentage
-  breakEvenRent: number; // per unit if multi-unit
-  currentMargin: number;
-  marginPercentage: number;
+  /** Percentage of units that need to be occupied to cover all costs. */
+  breakEvenOccupancyRate: number;
+  /** Number of units needed to break even. */
+  breakEvenUnitsOccupied: number;
+  /** Total rental income needed to break even. */
+  breakEvenRentalIncome: number;
+  /** Current profit or loss margin. */
+  currentOperatingMargin?: number;
+  /** Current profit or loss margin as a percentage of potential income. */
+  currentOperatingMarginPercentage?: number;
 }
 
-// Refinance analysis
+// Refinance analysis for an existing loan
 export interface RefinanceAnalysis {
   currentLoan: {
-    balance: number;
-    interestRate: number;
-    monthlyPayment: number;
+    outstandingBalance: number;
+    currentAnnualInterestRate: number; // As decimal
+    currentMonthlyPayment: number;
     remainingTermMonths: number;
   };
-  
-  newLoan: {
-    amount: number;
-    interestRate: number;
-    termMonths: number;
-    closingCosts: number;
-    monthlyPayment: number;
+
+  newLoanOffer: {
+    newLoanAmount: number; // Could be > outstandingBalance if cash-out
+    newAnnualInterestRate: number; // As decimal
+    newLoanTermMonths: number;
+    closingCostsAndFees: number;
+    newMonthlyPayment: number; // Calculated for the new loan
   };
-  
-  analysis: {
-    monthlySavings: number;
-    breakEvenMonths: number;
-    lifetimeSavings: number;
-    cashOut?: number;
-    
-    // NPV analysis
-    npvOfSavings: number;
-    effectiveInterestRate: number;
+
+  analysisSummary: {
+    changeInMonthlyPayment: number; // Positive if new payment is lower
+    /** Months to recoup closing costs through monthly savings. Null if no savings. */
+    breakEvenMonthsToRecoupCosts?: number | null;
+    totalInterestSavingsOverNewLoanTerm?: number; // Compared to keeping old loan
+    netCashReceivedOrPaidAtClosing: number; // (New Loan Amount - Outstanding Balance - Closing Costs)
+    impactOnLoanPayoffDate?: string; // e.g., "Extended by X months", "Shortened by Y months"
+    // Consider adding Net Present Value (NPV) of the refinance decision
   };
-  
-  recommendation: 'strongly_recommend' | 'recommend' | 'neutral' | 'not_recommend';
-  reasons: string[];
+
+  recommendation?: 'strongly_recommend' | 'consider' | 'neutral' | 'not_recommended';
+  keyReasons?: string[]; // Brief explanations for the recommendation
 }
 
-// Property comparison
-export interface PropertyComparison {
+// Comparison of multiple properties
+export interface PropertyPortfolioComparison {
   properties: Array<{
-    id: string;
+    id: string; // UUID
     name: string;
-    metrics: PropertyOperatingMetrics;
-    capRate: number;
-    cashOnCashReturn: number;
-    occupancyRate: number;
+    address?: string;
+    metrics: Partial<PropertyOperatingMetrics>; // Key metrics for comparison
+    capRate?: number;
+    cashOnCashReturn?: number;
+    occupancyRate?: number; // Current or average
+    purchasePrice?: number;
+    currentEstimatedValue?: number;
   }>;
-  
-  rankings: {
-    byNOI: string[];
-    byCapRate: string[];
-    byCashFlow: string[];
-    byOccupancy: string[];
+
+  // Comparative rankings based on selected criteria
+  rankings?: {
+    byNetOperatingIncome?: string[]; // Array of property IDs, ranked
+    byCapRate?: string[];
+    byCashOnCashReturn?: string[];
+    byOccupancyRate?: string[];
   };
-  
-  portfolio: {
-    totalValue: number;
-    totalNOI: number;
-    averageCapRate: number;
-    totalDebt: number;
-    totalEquity: number;
-    portfolioDSCR: number;
+
+  // Portfolio-level summary metrics
+  portfolioSummary?: {
+    totalProperties: number;
+    totalEstimatedValue?: number;
+    aggregateNetOperatingIncome?: number;
+    weightedAverageCapRate?: number;
+    totalDebt?: number; // If loan data is linked
+    totalEquity?: number;
+    overallPortfolioDSCR?: number;
   };
 }

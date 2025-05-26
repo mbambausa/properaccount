@@ -8,8 +8,14 @@
 
 export interface ApiResponse<T = any> {
   success: boolean;
+  /** * The main data payload. If the request was successful and the response was JSON,
+   * this will be the parsed JSON data (or `responseData.data` if the JSON has a `data` property).
+   * If successful but not JSON (e.g., plain text), this might be an object like `{ text: "..." }`.
+   * If not successful, this might contain partial data from an error response if available.
+   */
   data?: T;
   error?: string;
+  /** Detailed validation errors, if provided by the API. */
   errors?: Record<string, string[]> | Array<{ path: (string | number)[]; message: string }>;
   message?: string;
   status: number;
@@ -20,31 +26,47 @@ export interface ApiRequestOptions extends Omit<RequestInit, 'body' | 'headers'>
   baseUrl?: string;
   token?: string;
   includeCredentials?: boolean;
-  timeout?: number;
+  timeout?: number; // Milliseconds
+  /** * Explicitly sets the Content-Type. 
+   * - 'json': stringifies body, sets 'application/json'.
+   * - 'form-data': typically used with FormData body, Content-Type set by browser.
+   * - 'x-www-form-urlencoded': creates URLSearchParams, sets 'application/x-www-form-urlencoded'.
+   * - 'text': sets 'text/plain'.
+   * - `false`: useful for FormData to let browser set Content-Type with boundary.
+   * If `body` is FormData and contentType is not `false`, contentType might be ignored by some parts of the logic.
+   */
   contentType?: 'json' | 'form-data' | 'x-www-form-urlencoded' | 'text' | false;
   headers?: Record<string, string> | Headers;
   body?: any;
 }
 
+/**
+ * Makes an API request.
+ * @template T The expected type of the `data` field in a successful JSON response.
+ * @param endpoint The API endpoint path.
+ * @param options Configuration for the request.
+ * @returns A promise that resolves to an ApiResponse.
+ */
 export async function apiRequest<T = unknown>(
   endpoint: string,
   options: ApiRequestOptions = {}
 ): Promise<ApiResponse<T>> {
   const {
-    baseUrl = '',
+    baseUrl = '', // Default to empty string, allowing for relative paths or fully qualified endpoints
     method = 'GET',
     headers: optionHeaders = {},
     body,
     token,
-    includeCredentials = true,
-    timeout = 30000,
-    contentType = body instanceof FormData ? false : 'json',
+    includeCredentials = true, // 'include' is often needed for cookies/auth
+    timeout = 30000, // 30 seconds default timeout
+    contentType = body instanceof FormData ? false : 'json', // Infer content type if FormData, else default to JSON
     ...fetchOptions
   } = options;
 
+  // Construct full URL
   const url = endpoint.startsWith('http') || !baseUrl
     ? endpoint
-    : `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    : `${baseUrl.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   const requestHeaders = new Headers(optionHeaders);
 
@@ -75,7 +97,8 @@ export async function apiRequest<T = unknown>(
         }
         processedBody = params;
       } else {
-        processedBody = String(body);
+        // Fallback for non-object bodies with this content type
+        processedBody = String(body); 
       }
     } else if (contentType === 'text') {
       if (!requestHeaders.has('Content-Type')) {
@@ -83,9 +106,12 @@ export async function apiRequest<T = unknown>(
       }
       processedBody = String(body);
     } else if (contentType === false || body instanceof FormData) {
-      processedBody = body as FormData;
+      // Let the browser set the Content-Type for FormData (includes boundary)
+      // If contentType is explicitly false, also don't set it.
+      processedBody = body as FormData; 
     } else {
-      processedBody = body as BodyInit;
+      // For other body types or if contentType is 'form-data' but body isn't FormData instance
+      processedBody = body as BodyInit; 
     }
   }
 
@@ -101,86 +127,107 @@ export async function apiRequest<T = unknown>(
     ...fetchOptions,
   };
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+  const controller = new AbortController();
+  const timeoutId = timeout > 0 ? setTimeout(() => controller.abort(), timeout) : null;
+  if (timeout > 0) {
     fetchConfig.signal = controller.signal;
+  }
 
+  try {
     const response = await fetch(url, fetchConfig);
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
 
     type JsonResponseType = {
-      data?: T;
+      data?: T; // If the API wraps data in a 'data' property
       error?: string;
-      errors?: Record<string, string[]> | Array<{ path: (string | number)[]; message: string }>;
+      errors?: ApiResponse<T>['errors'];
       message?: string;
       redirectUrl?: string;
+      // Potentially other fields that might be part of the JSON response
+      [key: string]: any; 
     };
 
-    let responseData: JsonResponseType | any = null;
-    let textForError: string | undefined;
+    let responseBodyJson: JsonResponseType | null = null;
+    let responseBodyText: string | undefined;
 
     const responseContentType = response.headers.get('Content-Type');
+
+    // Try to parse as JSON if content type suggests it
     if (responseContentType?.includes('application/json')) {
       try {
-        responseData = await response.json();
-      } catch (e: unknown) { // Typed catch parameter
-        if (!response.ok || (response.ok && response.status !== 204)) {
-          console.warn(`API (${method} ${url}) response (status ${response.status}) claimed JSON but failed to parse:`, e);
-        }
+        responseBodyJson = await response.json();
+      } catch (jsonError: unknown) {
+        // JSON parsing failed. Log it, but don't immediately fail the request handling.
+        // We might still want to get text content for error messages.
+        console.warn(`API (${method} ${url}) response (status ${response.status}) claimed JSON but failed to parse:`, jsonError);
+        // Try to read the body as text for error reporting, but be cautious as stream might be consumed/errored.
+        // This is a best-effort attempt if JSON parsing fails.
         try {
-          // This line was the source of the "e implicitly has an any type" error if 'e' was not typed in the catch.
-          // Now 'e' is 'unknown'.
-          const tempText = await response.text(); // Try to get text if JSON parsing failed
-          if (!response.ok) textForError = tempText;
-        } catch { /* ignore if text read fails */ }
+          // Cloning is safer if you suspect stream issues, but here we're in a catch for .json() already.
+          responseBodyText = await response.text(); 
+        } catch (textError: unknown) {
+          console.warn(`API (${method} ${url}) also failed to read text body after JSON parse error:`, textError);
+        }
       }
     } else {
+      // If not JSON, try to read as text.
       try {
-        textForError = await response.text();
-        if (response.ok && textForError && typeof responseData === 'undefined') {
-          responseData = { text: textForError };
-        }
-      } catch (e: unknown) { // Typed catch parameter
-        console.warn(`API (${method} ${url}) response (status ${response.status}) failed to read text body:`, e);
+        responseBodyText = await response.text();
+      } catch (e: unknown) {
+        console.warn(`API (${method} ${url}) response (status ${response.status}) failed to read non-JSON text body:`, e);
       }
     }
 
     let finalErrorMessage: string | undefined;
     let finalValidationErrors: ApiResponse<T>['errors'];
+    let finalData: T | undefined;
 
-    if (!response.ok) {
-      finalErrorMessage = responseData?.message ||
-        responseData?.error ||
-        (responseData?.errors ? (Array.isArray(responseData.errors) ? responseData.errors.map((err: any) => err.message).join(', ') : JSON.stringify(responseData.errors)) : null) ||
-        textForError ||
+    if (response.ok) {
+      if (responseBodyJson) {
+        // If the API nests data under a 'data' key, use that. Otherwise, use the whole JSON object.
+        finalData = responseBodyJson.data !== undefined ? responseBodyJson.data : (responseBodyJson as T);
+      } else if (responseBodyText !== undefined) {
+        // If successful but not JSON, wrap text in a standard way if T allows or handle as per app needs.
+        // For a generic client, this might be { text: responseBodyText }
+        finalData = { text: responseBodyText } as unknown as T; 
+      }
+    } else { // Not response.ok
+      finalErrorMessage = responseBodyJson?.message ||
+        responseBodyJson?.error ||
+        (responseBodyJson?.errors ? (Array.isArray(responseBodyJson.errors) ? responseBodyJson.errors.map((err: any) => err.message).join(', ') : JSON.stringify(responseBodyJson.errors)) : null) ||
+        responseBodyText || // Use text if JSON error info is not available
         response.statusText ||
         `Request failed with status ${response.status}`;
-      finalValidationErrors = responseData?.errors;
+      finalValidationErrors = responseBodyJson?.errors;
+      // If the error response itself contains a 'data' field, capture it.
+      finalData = responseBodyJson?.data; 
     }
 
     return {
       success: response.ok,
-      data: response.ok ? (responseData?.data !== undefined ? responseData.data : responseData) : (responseData?.data),
+      data: finalData,
       error: finalErrorMessage,
       errors: finalValidationErrors,
-      message: response.ok ? (responseData?.message || 'Success') : finalErrorMessage,
+      message: response.ok ? (responseBodyJson?.message || 'Success') : finalErrorMessage,
       status: response.status,
-      redirectUrl: responseData?.redirectUrl,
+      redirectUrl: responseBodyJson?.redirectUrl,
     };
 
-  } catch (error: unknown) { // Typed catch parameter
-    let errorMessage = 'Unknown network error';
-    let errorStatus = 0;
+  } catch (error: unknown) {
+    if (timeoutId) clearTimeout(timeoutId);
+    let errorMessage = 'Unknown network error or request issue.';
+    let errorStatus = 0; // 0 indicates a client-side error like network failure or timeout
 
     if (error instanceof DOMException && error.name === 'AbortError') {
       errorMessage = 'Request timed out';
-      errorStatus = 408;
+      errorStatus = 408; // Request Timeout
     } else if (error instanceof Error) {
       errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
     }
 
-    console.error(`API request to ${url} failed:`, errorMessage, error);
+    console.error(`API request to ${method} ${url} failed:`, errorMessage, error);
     return {
       success: false,
       error: errorMessage,
@@ -190,8 +237,8 @@ export async function apiRequest<T = unknown>(
   }
 }
 
-// Convenience methods (apiGet, apiPost, etc.) remain the same as previous correct version.
-// ... (apiGet, apiPost, apiPut, apiDelete, apiPatch, apiSubmitForm from previous answer)
+// --- Convenience Methods ---
+
 /** Convenience method for GET requests */
 export async function apiGet<T = unknown>(
   endpoint: string,
@@ -210,6 +257,7 @@ export async function apiPost<T = unknown>(
     ...options,
     method: 'POST',
     body: data,
+    // contentType will default to 'json' if data is an object and not FormData, or 'false' if FormData
   });
 }
 
@@ -229,7 +277,7 @@ export async function apiPut<T = unknown>(
 /** Convenience method for DELETE requests */
 export async function apiDelete<T = unknown>(
   endpoint: string,
-  options: Omit<ApiRequestOptions, 'method' | 'body'> = {} 
+  options: Omit<ApiRequestOptions, 'method' | 'body' | 'contentType'> = {} 
 ): Promise<ApiResponse<T>> {
   return apiRequest<T>(endpoint, { ...options, method: 'DELETE' });
 }
@@ -250,13 +298,13 @@ export async function apiPatch<T = unknown>(
 /** Submit a form with FormData (e.g., for file uploads) */
 export async function apiSubmitForm<T = unknown>(
   endpoint: string,
-  formData: FormData,
+  formData: FormData, // Body is explicitly FormData
   options: Omit<ApiRequestOptions, 'method' | 'body' | 'contentType'> = {}
 ): Promise<ApiResponse<T>> {
   return apiRequest<T>(endpoint, {
     ...options,
-    method: (options as ApiRequestOptions).method || 'POST',
+    method: (options as ApiRequestOptions).method || 'POST', // Default to POST if not specified
     body: formData,
-    contentType: false, 
+    contentType: false, // Let browser set Content-Type for FormData
   });
 }

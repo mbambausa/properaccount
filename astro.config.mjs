@@ -3,42 +3,55 @@ import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
 import alpinejs from "@astrojs/alpinejs";
 import UnoCSS from "unocss/astro";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from 'node:url'; // Recommended to use 'node:url'
 
 // https://astro.build/config
 export default defineConfig({
   output: "server",
   adapter: cloudflare({
-    mode: "directory",
-    functionPerRoute: false,
+    mode: "directory", // Produces a _worker.js, suitable for Cloudflare Pages
+    functionPerRoute: false, // Single worker for all routes, generally preferred for Pages
+    // The 'runtime' configuration below is specific to the @astrojs/cloudflare adapter's
+    // local development server (when not using `wrangler pages dev`).
+    // It helps simulate the Pages environment locally.
+    // For deployments, Cloudflare Pages provides its own runtime.
     runtime: {
-      mode: "local",
-      type: "pages",
-      persistTo: "./.wrangler/state/v3/pages",
+      mode: "local", // Enables local runtime simulation
+      type: "pages", // Simulates the Cloudflare Pages environment
+      persistTo: "./.wrangler/state/v3/pages", // Standard path for Wrangler v3 local state
     },
   }),
   integrations: [
-    alpinejs({ entrypoint: '/scripts/alpine-setup.js' }), // Path confirmed by you
+    alpinejs({ entrypoint: '/scripts/alpine-setup.js' }), // Path confirmed from your structure
     UnoCSS({
+      // Using UnoCSS reset via the integration.
+      // Ensure this specific path to tailwind.css reset is intended and available.
+      // Alternatives: true (for default UnoCSS reset) or other reset paths.
       injectReset: "@unocss/reset/tailwind.css",
     }),
   ],
   build: {
+    // 'auto' is a good default. It inlines small stylesheets and extracts larger ones.
     inlineStylesheets: 'auto',
-    assets: 'chunks'
+    // Default is 'chunks', which is usually optimal for caching and parallelism.
+    assets: 'chunks' 
   },
   vite: {
     build: {
-      sourcemap: true,
+      sourcemap: true, // Enable sourcemaps for easier debugging in production if needed
       rollupOptions: {
+        // `@node-rs/argon2` uses native bindings, correctly externalized.
+        // Cloudflare Workers with `nodejs_compat` flag can handle it.
         external: ['@node-rs/argon2'],
         output: {
+          // Manual chunks for vendor libraries can help with caching and initial load.
+          // Regularly review these chunks based on usage and size.
           manualChunks: {
             'vendor-core': ['decimal.js', 'zod', 'drizzle-orm'],
-            'vendor-auth': ['@auth/core', '@auth/d1-adapter', 'csrf-csrf'],
-            'vendor-charts': ['d3'],
-            'vendor-excel': ['exceljs'], // xlsx removed
-            'vendor-pdf': ['tesseract.js'],
+            'vendor-auth': ['@auth/core', '@auth/d1-adapter', 'csrf-csrf'], // Ensure csrf-csrf is still needed given Auth.js and custom middleware CSRF
+            'vendor-charts': ['d3'], // D3 can be large, good to isolate
+            'vendor-excel': ['exceljs'], // exceljs is also substantial
+            'vendor-pdf': ['tesseract.js'], // tesseract.js is very large, implies client-side OCR
             'vendor-parse': ['papaparse', 'mathjs'],
             'vendor-ui': ['alpinejs', '@alpinejs/collapse', '@alpinejs/intersect', 'htmx.org']
           }
@@ -46,16 +59,19 @@ export default defineConfig({
       }
     },
     optimizeDeps: {
-      include: ['decimal.js', 'papaparse', 'exceljs', 'zod', 'drizzle-orm'] // xlsx removed, exceljs added
+      // Ensure all expected large/commonJS dependencies that Vite might struggle with are included.
+      include: ['decimal.js', 'papaparse', 'exceljs', 'zod', 'drizzle-orm']
     },
     ssr: {
+      // These packages should be bundled with the server/worker code.
       noExternal: ['@auth/core', '@auth/d1-adapter']
+      // `@node-rs/argon2` should NOT be here; it's correctly in `external` above.
     },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
         '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
-        '@layouts': fileURLToPath(new URL('./src/components/layout', import.meta.url)),
+        '@layouts': fileURLToPath(new URL('./src/components/layout', import.meta.url)), // This path was correct as per your structure
         '@lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
         '@assets': fileURLToPath(new URL('./src/assets', import.meta.url)),
         '@styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
@@ -63,9 +79,11 @@ export default defineConfig({
         '@content': fileURLToPath(new URL('./src/content', import.meta.url)),
         '@db': fileURLToPath(new URL('./cloudflare/d1', import.meta.url))
       },
-      conditions: ["worker", "browser"],
+      // 'worker' condition is useful if you have specific exports for worker environments.
+      conditions: ["worker", "browser"], 
     },
     worker: {
+      // Ensures that web workers generated by Vite are in ES module format.
       format: 'es',
     }
   }

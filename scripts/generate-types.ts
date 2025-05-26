@@ -1,4 +1,4 @@
-// scripts/generate-types.js
+// scripts/generate-types.ts
 
 // IMPORTANT: This script imports TypeScript files directly (.ts).
 // To run it, you'll need a TypeScript runner like tsx or ts-node.
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 
 // Adjust the import path to your Drizzle schema .ts file.
 // Using tsx or ts-node allows direct import of .ts files.
-import * as schema from '../../cloudflare/d1/schema.ts';
+import * as schema from '../cloudflare/d1/schema.ts';
 
 
 const __filename = fileURLToPath(import.meta.url);
