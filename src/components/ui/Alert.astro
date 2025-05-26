@@ -9,31 +9,43 @@ interface Props {
 const { 
   type = 'info',
   dismissible = false,
-  class: customClassFromProps // Store the passed class prop
+  class: customClassFromProps
 } = Astro.props;
 
-// Color classes using HSL variables instead of direct color classes
-const colorClasses = {
-  info: 'bg-primary-50 text-primary-800 border-primary-200 dark:bg-primary-900/30 dark:text-primary-200 dark:border-primary-700',
-  success: 'bg-success/10 text-success border-success/20 dark:bg-success/20 dark:text-success dark:border-success/30',
-  warning: 'bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700',
-  error: 'bg-danger/10 text-danger border-danger/20 dark:bg-danger/20 dark:text-danger dark:border-danger/30'
+const baseAlertClasses = "p-4 mb-4 border rounded-md";
+
+const typeStyles = {
+  info: {
+    container: 'bg-primary-50 text-primary-800 border-primary-200 dark:bg-primary-900/30 dark:text-primary-200 dark:border-primary-700',
+    emoji: 'ℹ️', // Example: Information emoji
+    emojiClass: 'text-primary-500', // Optional: if you want to color the emoji via a parent span
+  },
+  success: {
+    container: 'bg-success/10 text-success border-success/20 dark:bg-success/20 dark:text-success dark:border-success/30',
+    emoji: '✅', // Example: Checkmark emoji
+    emojiClass: 'text-success',
+  },
+  warning: {
+    container: 'bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700',
+    emoji: '⚠️', // Example: Warning emoji
+    emojiClass: 'text-yellow-500', // Using yellow-500 for consistency if needed, though emojis have their own color
+  },
+  error: {
+    container: 'bg-danger/10 text-danger border-danger/20 dark:bg-danger/20 dark:text-danger dark:border-danger/30',
+    emoji: '❌', // Example: Cross mark emoji (or 🛑 for stop)
+    emojiClass: 'text-danger',
+  }
 };
 
-// Icon classes based on alert type
-const iconClasses = {
-  info: 'i-carbon-information-filled text-primary-500',
-  success: 'i-carbon-checkmark-filled text-success',
-  warning: 'i-carbon-warning-alt-filled text-yellow-500',
-  error: 'i-carbon-warning-filled text-danger'
-};
+const currentTypeStyle = typeStyles[type];
+const closeEmoji = '✕'; // Heavy multiplication X or similar
 ---
 
 <div 
   class:list={[
-    "p-4 mb-4 border rounded-md", // Default classes for the alert
-    colorClasses[type],           // Type-specific color classes
-    customClassFromProps          // Additional classes passed via props
+    baseAlertClasses,
+    currentTypeStyle.container,
+    customClassFromProps
   ]}
   x-data="{ show: true }"
   x-show="show"
@@ -43,8 +55,8 @@ const iconClasses = {
   role="alert"
 >
   <div class="flex items-start">
-    <div class="flex-shrink-0 mr-3">
-      <div class={`${iconClasses[type]} h-5 w-5`}></div>
+    <div class:list={["flex-shrink-0 mr-3 text-xl leading-none", currentTypeStyle.emojiClass]} aria-hidden="true">
+      {currentTypeStyle.emoji}
     </div>
     <div class="flex-1">
       <slot />
@@ -52,12 +64,12 @@ const iconClasses = {
     {dismissible && (
       <button 
         type="button"
-        class="ml-auto -mx-1.5 -my-1.5 rounded-lg p-1.5 inline-flex items-center justify-center h-8 w-8 hover:bg-black/10 dark:hover:bg-white/10 transition-colors duration-150"
-        aria-label="Close"
+        class="ml-auto -mx-1.5 -my-1.5 rounded-lg p-1.5 inline-flex items-center justify-center h-8 w-8 hover:bg-black/10 dark:hover:bg-white/10 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-current"
+        aria-label="Close alert"
         @click="show = false"
       >
         <span class="sr-only">Close</span>
-        <div class="i-carbon-close h-4 w-4"></div>
+        <span class="h-4 w-4 inline-flex items-center justify-center" aria-hidden="true">{closeEmoji}</span>
       </button>
     )}
   </div>

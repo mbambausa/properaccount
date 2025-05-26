@@ -1,0 +1,49 @@
+---
+// src/components/layout/Header.astro
+export interface Props {
+  title: string;
+  headerBorder?: boolean;
+}
+
+const { title, headerBorder = true } = Astro.props;
+
+const searchEmoji = '🔍';
+const notificationsEmoji = '🔔';
+const mobileMenuEmoji = '☰';
+---
+
+<header class:list={[
+  "sticky top-0 w-full h-[var(--header-height)] flex items-center justify-between px-4 lg:px-8 bg-white/80 dark:bg-neutral-800/80 backdrop-blur-md shadow-sm",
+  "z-[var(--z-sticky)]", // Corrected z-index usage with CSS variable
+  headerBorder ? "border-b border-neutral-200 dark:border-neutral-700" : ""
+]}>
+  <div class="flex items-center">
+    <button
+      type="button"
+      class="lg:hidden p-2 -ml-2 mr-2 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+      @click="$dispatch('toggle-sidebar-mobile')" 
+      aria-label="Open sidebar"
+      aria-controls="sidebar" 
+    >
+      <span class="text-xl" aria-hidden="true">{mobileMenuEmoji}</span>
+    </button>
+
+    <h1 class="text-xl font-semibold text-neutral-900 dark:text-white truncate">
+      {title}
+    </h1>
+  </div>
+
+  <div class="flex items-center space-x-3 sm:space-x-4">
+    <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150" aria-label="Search">
+      <span class="text-lg" aria-hidden="true">{searchEmoji}</span>
+      <span class="sr-only">Search</span>
+    </button>
+    
+    <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150" aria-label="Notifications">
+      <span class="text-lg" aria-hidden="true">{notificationsEmoji}</span>
+      <span class="sr-only">Notifications</span>
+    </button>
+    
+    {/* Theme Toggle Button Removed */}
+  </div>
+</header>

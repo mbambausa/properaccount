@@ -1,73 +1,53 @@
 ---
 // src/components/layout/BaseLayout.astro
-import '@/styles/global.css';
-import ThemeScript from '@/components/theme/ThemeScript.astro';
-import ThemeToggle from '@/components/theme/ThemeToggle.astro';
-import DebugTools from '@/components/dev/DebugTools.astro';
-import ViewTransitions from '@/components/layout/ViewTransitions.astro';
-import ToastContainer from '@/components/ui/ToastContainer.astro';
+import { ViewTransitions } from 'astro:transitions';
+import '@/styles/global.css'; // Import global styles once here
 
 export interface Props {
   title: string;
   description?: string;
-  contentWidth?: 'narrow' | 'standard' | 'wide' | 'full'; // New content width prop
+  lang?: string;
 }
 
 const { 
   title, 
-  description = "ProperAccount - Real Estate Accounting",
-  contentWidth = 'standard' 
+  description = 'ProperAccount - Real Estate Accounting Application',
+  lang = 'en'
 } = Astro.props;
-
-// Content width classes map
-const contentWidthClasses = {
-  narrow: 'max-w-4xl',
-  standard: 'max-w-7xl',
-  wide: 'max-w-screen-2xl',
-  full: 'w-full'
-};
 ---
 
 <!DOCTYPE html>
-<html lang="en" class="font-sans">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content={description}>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <title>{title}</title>
-  <ThemeScript />
-  <ViewTransitions />
-  <DebugTools />
-</head>
-<body class="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 antialiased">
-  <!-- Accessibility skip link -->
-  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-white dark:focus:bg-neutral-800 focus:text-primary-600 focus:top-0 focus:left-0">
-    Skip to main content
-  </a>
-  
-  <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 shadow-sm">
-    <div class={`${contentWidthClasses[contentWidth]} mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between`}>
-      <a href="/" class="flex items-center space-x-2 group">
-        <div class="h-8 w-8 bg-primary-600 rounded-md flex items-center justify-center text-white font-bold text-lg group-hover:bg-primary-700 transition-colors">
-          PA
-        </div>
-        <span class="text-xl font-semibold text-neutral-800 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">ProperAccount</span>
-      </a>
-      <div class="flex items-center space-x-4">
-        <a href="/auth/login" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Sign in</a>
-        <ThemeToggle size="md" />
-      </div>
-    </div>
-  </header>
-  
-  <!-- Main content with ID for skip link -->
-  <main id="main-content" class="py-8">
-    <div class={`${contentWidthClasses[contentWidth]} mx-auto px-4 sm:px-6 lg:px-8`}>
-      <slot />
-    </div>
-  </main>
-  
-  <ToastContainer />
-</body>
+<html lang={lang} class="h-full font-sans"> {/* Ensure font-sans is effectively applied via global.css or UnoCSS base */}
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | ProperAccount</title>
+    
+    <ViewTransitions />
+
+    {/* Script to apply OS-preference theme (dark/light) */}
+    <script is:inline>
+      (function() {
+        try {
+          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {
+          console.warn("Could not apply OS theme preference:", e);
+          // Default to light theme if matchMedia fails for some reason
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
+    
+    <slot name="head-extra" />
+  </head>
+  <body class="h-full antialiased"> {/* Base bg/text colors come from global.css via .dark on html */}
+    <slot /> {/* Main page content */}
+  </body>
 </html>

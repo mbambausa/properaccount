@@ -1,0 +1,157 @@
+---
+// src/components/ui/Modal.astro
+export interface Props {
+  id: string; // Unique ID for the modal, used to control it externally
+  title?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  closeOnEscape?: boolean;
+  closeOnClickOutside?: boolean;
+  class?: string; // Classes for the modal panel
+  titleId?: string; // ID for the title element, for aria-labelledby
+  initialOpen?: boolean; // For controlling open state from server or parent Alpine
+}
+
+const {
+  id,
+  title,
+  size = 'md',
+  closeOnEscape = true,
+  closeOnClickOutside = true,
+  class: userClassName,
+  titleId = `${id}-title`,
+  initialOpen = false,
+} = Astro.props;
+
+const sizeClasses = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  full: 'max-w-full h-full',
+};
+
+const closeEmoji = '✕';
+---
+
+<div
+  x-data={`{ 
+    open: ${initialOpen}, 
+    modalId: '${id}',
+    init() { 
+      this.$watch('open', value => {
+        if (value) {
+          document.body.style.overflow = 'hidden';
+          this.$nextTick(() => this.$refs.modalPanel.focus());
+        } else {
+          document.body.style.overflow = '';
+        }
+      });
+      if (this.open) { // Initial state if server-rendered open
+          document.body.style.overflow = 'hidden';
+      }
+      // Listen for global event to open this specific modal
+      window.addEventListener('open-modal', (event) => {
+        if (event.detail.id === this.modalId) {
+          this.open = true;
+        }
+      });
+      // Listen for global event to close this specific modal
+      window.addEventListener('close-modal', (event) => {
+        if (event.detail.id === this.modalId) {
+          this.open = false;
+        }
+      });
+    },
+    close() { this.open = false; }
+  }`}
+  x-show="open"
+  x-trap.inert.noscroll="open"
+  x-transition:enter="transition ease-out duration-200"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  x-transition:leave="transition ease-in duration-150"
+  x-transition:leave-start="opacity-100"
+  x-transition:leave-end="opacity-0"
+  class="fixed inset-0 z-modal overflow-y-auto flex items-center justify-center p-4"
+  style="display: none;"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby={title ? titleId : undefined}
+  tabindex="-1"
+  {...(closeOnEscape ? { '@keydown.escape.window': 'close()' } : {})}
+>
+  {/* Overlay */}
+  <div 
+    class="fixed inset-0 bg-neutral-900/70 dark:bg-black/80"
+    aria-hidden="true"
+    x-show="open"
+    x-transition:enter="transition-opacity ease-out duration-200"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition-opacity ease-in duration-150"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    {...(closeOnClickOutside ? { '@click': 'close()' } : {})}>
+  </div>
+
+  {/* Modal Panel */}
+  <div
+    x-ref="modalPanel"
+    x-show="open"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100 scale-100"
+    x-transition:leave-end="opacity-0 scale-95"
+    class:list={[
+      "relative bg-white dark:bg-neutral-800 rounded-lg shadow-xl overflow-hidden w-full flex flex-col",
+      sizeClasses[size],
+      userClassName
+    ]}
+    {...(closeOnClickOutside ? { '@click.stop': '' } : {})} 
+    tabindex="0" >
+    {/* Header */}
+    <div class="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-700">
+      {title && <h3 id={titleId} class="text-lg font-semibold text-neutral-900 dark:text-white">{title}</h3>}
+      <slot name="header-actions"></slot>
+      <button
+        type="button"
+        class="ml-auto -mr-2 -my-2 p-2 rounded-md text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
+        aria-label="Close modal"
+        @click="close()"
+      >
+        <span class="sr-only">Close</span>
+        <span aria-hidden="true">{closeEmoji}</span>
+      </button>
+    </div>
+
+    {/* Body */}
+    <div class="p-6 flex-1 overflow-y-auto">
+      <slot />
+    </div>
+
+    {/* Footer (optional) */}
+    {Astro.slots.has('footer') && (
+      <div class="px-4 py-3 bg-neutral-50 dark:bg-neutral-700/30 border-t border-neutral-200 dark:border-neutral-700 flex flex-row-reverse gap-2">
+        <slot name="footer" />
+      </div>
+    )}
+  </div>
+</div>
+
+<script is:inline>
+// Helper to dispatch modal events globally
+// Example: window.dispatchModal('open', 'my-modal-id');
+// Example: window.dispatchModal('close', 'my-modal-id');
+if (typeof window.dispatchModal !== 'function') {
+  window.dispatchModal = (action, modalId, detail = {}) => {
+    if (!modalId) {
+      console.warn('dispatchModal: modalId is required.');
+      return;
+    }
+    const eventName = action === 'open' ? 'open-modal' : 'close-modal';
+    window.dispatchEvent(new CustomEvent(eventName, { detail: { id: modalId, ...detail } }));
+  };
+}
+</script>

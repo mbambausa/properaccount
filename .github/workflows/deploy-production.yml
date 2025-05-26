@@ -1,0 +1,264 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual deployments
+
+env:
+  NODE_ENV: production
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      # Consider caching Playwright browsers as well
+      - name: Cache npm dependencies and Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.cache/ms-playwright 
+            # Path for Playwright browser cache. May vary slightly by OS runner but this is common for Linux.
+          key: ${{ runner.os }}-deps-playwright-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-playwright-
+            ${{ runner.os }}-deps-
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run linters
+        run: npm run lint
+
+      - name: Install Playwright browsers for tests
+        # This step might be faster or unnecessary if browsers are correctly cached and restored.
+        # Playwright's `install` command is idempotent and will skip if browsers are found.
+        run: npx playwright install --with-deps chromium 
+
+      - name: Run tests
+        run: npm run test
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      
+      - name: Install dependencies for audit
+        # Using npm ci ensures we audit against the locked dependencies.
+        # Including --include=dev here might be good if dev tools vulnerabilities are a concern.
+        # However, --production in npm audit focuses on what's in production.
+        run: npm ci --prefer-offline --no-audit --include=dev 
+
+      - name: Run security audit
+        # Audits only production dependencies. If dev dependencies are also a concern for build-time attacks,
+        # you might remove --production here, but it will be noisier.
+        run: npm audit --production --audit-level=high 
+        continue-on-error: true 
+
+  build:
+    name: Build Application
+    needs: [test, security-scan]
+    runs-on: ubuntu-latest
+    
+    outputs:
+      build_manifest_path: ${{ steps.generate_manifest.outputs.manifest_path }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Cache dependencies and builds
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .astro # Astro's build cache
+          key: ${{ runner.os }}-prod-deps-build-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-prod-deps-build-
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build application
+        run: npm run build
+        env:
+          # Ensure this URL is correct for your production environment
+          PUBLIC_APP_URL: https://properaccount.com 
+
+      - name: Generate build manifest
+        id: generate_manifest
+        run: |
+          MANIFEST_DIR=dist
+          MANIFEST_PATH="$MANIFEST_DIR/_build.json"
+          mkdir -p $MANIFEST_DIR
+          echo "{
+            \"version\": \"${{ github.sha }}\",
+            \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+            \"branch\": \"main\"
+          }" > $MANIFEST_PATH
+          echo "manifest_path=$MANIFEST_PATH" >> $GITHUB_OUTPUT
+          echo "Build manifest generated at $MANIFEST_PATH"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Uncomment this block if you have created an environment named 'production'
+    # in GitHub Repo Settings -> Environments, and want to use its protection rules or secrets.
+    # environment:
+    #   name: production 
+    #   url: https://properaccount.com
+
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3 
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=properaccount --branch=main
+          wranglerVersion: '3'
+
+      - name: Run D1 Migrations (Production)
+        uses: cloudflare/wrangler-action@v3
+        # Pass necessary secrets as env vars for Wrangler,
+        # and explicitly set WRANGLER_ENV if not using GitHub Environments for context.
+        env:
+          WRANGLER_ENV: production # Ensures wrangler uses [env.production] from wrangler.toml
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }} # Also required by the action's input
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }} # Also required by the action's input
+          command: d1 migrations apply DATABASE # Use binding name 'DATABASE'
+          wranglerVersion: '3'
+
+      - name: Purge Cloudflare Cache
+        if: success() && vars.CLOUDFLARE_ZONE_ID != '' # Check if the variable is set
+        env:
+          CF_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CF_ZONE_ID" ]; then # Double check, though the 'if' condition should handle it
+            echo "CLOUDFLARE_ZONE_ID (vars) is not set. Skipping cache purge."
+            exit 0
+          fi
+          if [ -z "$CF_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN (secret) is not set. Skipping cache purge."
+            exit 0 # Or exit 1 if token is mandatory for this step to even attempt
+          fi
+
+          echo "Attempting to purge Cloudflare cache for Zone ID: $CF_ZONE_ID"
+          RESPONSE_CODE=$(curl -s -o /dev/stderr -w "%{http_code}" -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+          if [ "$RESPONSE_CODE" -ge 200 ] && [ "$RESPONSE_CODE" -lt 300 ]; then
+            echo "Cache purge command successful (HTTP $RESPONSE_CODE)."
+          else
+            echo "Cache purge command failed (HTTP $RESPONSE_CODE)."
+            # Consider failing the step if purge is critical: exit 1
+          fi
+
+      - name: Create GitHub Deployment Record
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }} 
+          script: |
+            try {
+              const deployment = await github.rest.repos.createDeployment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: context.ref, // Correctly refers to the commit/branch/tag being deployed
+                // If you uncommented the job-level 'environment' block, this should match.
+                // Otherwise, GitHub creates a generic 'production' deployment if production_environment is true.
+                environment: 'production', 
+                description: 'Production deployment via GitHub Actions',
+                auto_merge: false, // Usually false for deployments
+                required_contexts: [], // Can list job names that must pass
+                production_environment: true, // Marks this as a production deployment
+                transient_environment: false // Production environments are not transient
+              });
+              if (deployment.data.id) {
+                await github.rest.repos.createDeploymentStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: deployment.data.id,
+                  state: 'success', 
+                  log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                  environment_url: 'https://properaccount.com' // Ensure this is your correct prod URL
+                });
+              } else {
+                core.setFailed('Failed to create GitHub deployment record.');
+              }
+            } catch (error) {
+              core.setFailed(`Failed to create GitHub deployment: ${error.message}`);
+            }
+
+  post-deploy-checks:
+    name: Post-Deployment Verification
+    needs: deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Health check
+        run: |
+          for i in {1..5}; do
+            # Ensure your health endpoint is GETtable and returns success (2xx)
+            if curl --fail --silent --show-error https://properaccount.com/api/health; then 
+              echo "Health check passed on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10 seconds..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts."
+          exit 1
+
+      - name: Notify deployment status (Basic)
+        if: always() 
+        run: |
+          echo "Production deployment workflow finished with overall status for 'post-deploy-checks': ${{ job.status }}"

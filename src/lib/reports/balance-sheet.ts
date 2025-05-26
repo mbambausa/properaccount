@@ -7,11 +7,19 @@
  */
 
 // Use type-only imports for types when verbatimModuleSyntax is enabled
-import type { BalanceSheetReport, ReportLineItem, ReportTimeFrame, AccountBalance } from '../../types/report';
+import type {
+  BalanceSheetReport,
+  ReportLineItem,
+  ReportTimeFrame,
+  AccountBalance,
+} from "../../types/report";
 // Update import paths to use our accounting-api
-import { getAccountBalances, getAccountsByType } from '../accounting/accounting-api';
-import { formatCurrency } from '../../utils/format';
-import type { D1Database } from '@cloudflare/workers-types';
+import {
+  getAccountBalances,
+  getAccountsByType,
+} from "../accounting/core/accounting-api";
+import { formatCurrency } from "../../utils/format";
+import type { D1Database } from "@cloudflare/workers-types";
 
 /**
  * Represents the structure of an Account.
@@ -27,19 +35,48 @@ interface Account {
   // Add any other properties that getAccountsByType might return for an account
 }
 
-
 /**
  * Account type categories for the balance sheet
  */
-const ASSET_ACCOUNT_TYPES = ['ASSET', 'CURRENT_ASSET', 'FIXED_ASSET', 'OTHER_ASSET', 'BANK', 'ACCOUNTS_RECEIVABLE', 'INVENTORY'];
-const LIABILITY_ACCOUNT_TYPES = ['LIABILITY', 'CURRENT_LIABILITY', 'LONG_TERM_LIABILITY', 'OTHER_LIABILITY', 'ACCOUNTS_PAYABLE', 'CREDIT_CARD'];
-const EQUITY_ACCOUNT_TYPES = ['EQUITY', 'RETAINED_EARNINGS', 'COMMON_STOCK', 'OWNER_EQUITY', 'PARTNER_EQUITY'];
+const ASSET_ACCOUNT_TYPES = [
+  "ASSET",
+  "CURRENT_ASSET",
+  "FIXED_ASSET",
+  "OTHER_ASSET",
+  "BANK",
+  "ACCOUNTS_RECEIVABLE",
+  "INVENTORY",
+];
+const LIABILITY_ACCOUNT_TYPES = [
+  "LIABILITY",
+  "CURRENT_LIABILITY",
+  "LONG_TERM_LIABILITY",
+  "OTHER_LIABILITY",
+  "ACCOUNTS_PAYABLE",
+  "CREDIT_CARD",
+];
+const EQUITY_ACCOUNT_TYPES = [
+  "EQUITY",
+  "RETAINED_EARNINGS",
+  "COMMON_STOCK",
+  "OWNER_EQUITY",
+  "PARTNER_EQUITY",
+];
 
 /**
  * Current vs long-term categorization
  */
-const CURRENT_ASSET_TYPES = ['CURRENT_ASSET', 'BANK', 'ACCOUNTS_RECEIVABLE', 'INVENTORY'];
-const CURRENT_LIABILITY_TYPES = ['CURRENT_LIABILITY', 'ACCOUNTS_PAYABLE', 'CREDIT_CARD'];
+const CURRENT_ASSET_TYPES = [
+  "CURRENT_ASSET",
+  "BANK",
+  "ACCOUNTS_RECEIVABLE",
+  "INVENTORY",
+];
+const CURRENT_LIABILITY_TYPES = [
+  "CURRENT_LIABILITY",
+  "ACCOUNTS_PAYABLE",
+  "CREDIT_CARD",
+];
 
 /**
  * Options for generating a balance sheet report
@@ -73,7 +110,9 @@ export interface BalanceSheetOptions {
  * @param options Report generation options
  * @returns Balance sheet report
  */
-export async function generateBalanceSheet(options: BalanceSheetOptions): Promise<BalanceSheetReport> {
+export async function generateBalanceSheet(
+  options: BalanceSheetOptions
+): Promise<BalanceSheetReport> {
   const {
     entityId,
     timeFrame,
@@ -81,17 +120,21 @@ export async function generateBalanceSheet(options: BalanceSheetOptions): Promis
     previousDate,
     includeComparison = false,
     includeAccountDetails = true,
-    currencyCode = 'USD', // currencyCode is now used
+    currencyCode = "USD", // currencyCode is now used
     db,
-    userId
+    userId,
   } = options;
 
   // 1. Fetch all relevant account balances
   const accountBalances: AccountBalance[] = await getAccountBalances({
     entityId,
     asOfDate,
-    accountTypes: [...ASSET_ACCOUNT_TYPES, ...LIABILITY_ACCOUNT_TYPES, ...EQUITY_ACCOUNT_TYPES],
-    db
+    accountTypes: [
+      ...ASSET_ACCOUNT_TYPES,
+      ...LIABILITY_ACCOUNT_TYPES,
+      ...EQUITY_ACCOUNT_TYPES,
+    ],
+    db,
   });
 
   // 2. If comparison is requested, fetch previous period balances
@@ -100,8 +143,12 @@ export async function generateBalanceSheet(options: BalanceSheetOptions): Promis
     previousBalances = await getAccountBalances({
       entityId,
       asOfDate: previousDate,
-      accountTypes: [...ASSET_ACCOUNT_TYPES, ...LIABILITY_ACCOUNT_TYPES, ...EQUITY_ACCOUNT_TYPES],
-      db
+      accountTypes: [
+        ...ASSET_ACCOUNT_TYPES,
+        ...LIABILITY_ACCOUNT_TYPES,
+        ...EQUITY_ACCOUNT_TYPES,
+      ],
+      db,
     });
   }
 
@@ -109,52 +156,72 @@ export async function generateBalanceSheet(options: BalanceSheetOptions): Promis
   // Ensure getAccountsByType returns Promise<Account[]>
   const accounts: Account[] = await getAccountsByType({
     entityId,
-    types: [...ASSET_ACCOUNT_TYPES, ...LIABILITY_ACCOUNT_TYPES, ...EQUITY_ACCOUNT_TYPES],
-    db
+    types: [
+      ...ASSET_ACCOUNT_TYPES,
+      ...LIABILITY_ACCOUNT_TYPES,
+      ...EQUITY_ACCOUNT_TYPES,
+    ],
+    db,
   });
 
   // 4. Create an account lookup map for easier access
   const accountMap = new Map<string, Account>(); // Typed the Map
-  accounts.forEach((account: Account) => { // Explicitly type 'account'
+  accounts.forEach((account: Account) => {
+    // Explicitly type 'account'
     accountMap.set(account.id, account);
   });
 
   // 5. Process assets section
-  const assets = processAssetSection(accountBalances, previousBalances, accountMap, includeComparison);
+  const assets = processAssetSection(
+    accountBalances,
+    previousBalances,
+    accountMap,
+    includeComparison
+  );
 
   // 6. Process liabilities section
-  const liabilities = processLiabilitySection(accountBalances, previousBalances, accountMap, includeComparison);
+  const liabilities = processLiabilitySection(
+    accountBalances,
+    previousBalances,
+    accountMap,
+    includeComparison
+  );
 
   // 7. Process equity section
-  const equity = processEquitySection(accountBalances, previousBalances, accountMap, includeComparison);
+  const equity = processEquitySection(
+    accountBalances,
+    previousBalances,
+    accountMap,
+    includeComparison
+  );
 
   // 8. Generate the report
   const report: BalanceSheetReport = {
     id: crypto.randomUUID(),
-    type: 'balance-sheet',
+    type: "balance-sheet",
     title: `Balance Sheet - ${new Date(asOfDate).toLocaleDateString()}`,
     timeFrame: timeFrame,
     entityId: entityId,
     generatedAt: new Date().toISOString(),
     generatedBy: userId,
-    version: '1.0',
+    version: "1.0",
     finalized: false,
     assets: {
       current: assets.current,
       longTerm: assets.longTerm,
-      total: assets.total
+      total: assets.total,
     },
     liabilities: {
       current: liabilities.current,
       longTerm: liabilities.longTerm,
-      total: liabilities.total
+      total: liabilities.total,
     },
     equity: {
       items: equity.items,
-      total: equity.total
+      total: equity.total,
     },
     currencyCode: currencyCode, // Added currencyCode to the report object
-    accountBalances: includeAccountDetails ? accountBalances : []
+    accountBalances: includeAccountDetails ? accountBalances : [],
   };
 
   // Verify the balance sheet equation: Assets = Liabilities + Equity
@@ -162,7 +229,9 @@ export async function generateBalanceSheet(options: BalanceSheetOptions): Promis
   const isBalanced = Math.abs(assets.total - totalLiabilitiesAndEquity) < 0.01; // Allow for small rounding errors
 
   if (!isBalanced) {
-    console.warn(`Balance sheet equation doesn't balance. Assets: ${assets.total}, Liabilities + Equity: ${totalLiabilitiesAndEquity}, Difference: ${assets.total - totalLiabilitiesAndEquity}`);
+    console.warn(
+      `Balance sheet equation doesn't balance. Assets: ${assets.total}, Liabilities + Equity: ${totalLiabilitiesAndEquity}, Difference: ${assets.total - totalLiabilitiesAndEquity}`
+    );
   }
 
   return report;
@@ -176,27 +245,27 @@ function processAssetSection(
   previousBalances: AccountBalance[],
   accountMap: Map<string, Account>, // Use the Account type
   includeComparison: boolean
-): { current: ReportLineItem[], longTerm: ReportLineItem[], total: number } {
+): { current: ReportLineItem[]; longTerm: ReportLineItem[]; total: number } {
   // Filter to only asset accounts
-  const assetBalances = accountBalances.filter(balance => {
+  const assetBalances = accountBalances.filter((balance) => {
     const account = accountMap.get(balance.accountId);
     return account && ASSET_ACCOUNT_TYPES.includes(account.type);
   });
 
   // Create maps for current and previous balances for quick lookup
   const balanceMap = new Map<string, number>();
-  assetBalances.forEach(balance => {
+  assetBalances.forEach((balance) => {
     balanceMap.set(balance.accountId, balance.balance);
   });
 
   const previousBalanceMap = new Map<string, number>();
   if (includeComparison) {
     previousBalances
-      .filter(balance => {
+      .filter((balance) => {
         const account = accountMap.get(balance.accountId);
         return account && ASSET_ACCOUNT_TYPES.includes(account.type);
       })
-      .forEach(balance => {
+      .forEach((balance) => {
         previousBalanceMap.set(balance.accountId, balance.balance);
       });
   }
@@ -206,25 +275,31 @@ function processAssetSection(
   const longTermAssets: ReportLineItem[] = [];
 
   // Process each asset account
-  assetBalances.forEach(balance => {
+  assetBalances.forEach((balance) => {
     const account = accountMap.get(balance.accountId);
     if (!account) return;
 
     const lineItem: ReportLineItem = {
       accountId: balance.accountId,
-      code: account.code || '',
+      code: account.code || "",
       name: account.name,
       amount: balance.balance,
-      order: account.displayOrder || 0
+      order: account.displayOrder || 0,
     };
 
     // Add comparison data if available
     if (includeComparison) {
-      const previousBalanceValue = previousBalanceMap.get(balance.accountId) || 0;
+      const previousBalanceValue =
+        previousBalanceMap.get(balance.accountId) || 0;
       lineItem.previousAmount = previousBalanceValue;
-      lineItem.percentChange = previousBalanceValue !== 0
-        ? ((balance.balance - previousBalanceValue) / Math.abs(previousBalanceValue)) * 100
-        : balance.balance !== 0 ? 100 : 0;
+      lineItem.percentChange =
+        previousBalanceValue !== 0
+          ? ((balance.balance - previousBalanceValue) /
+              Math.abs(previousBalanceValue)) *
+            100
+          : balance.balance !== 0
+            ? 100
+            : 0;
     }
 
     // Categorize as current or long-term asset
@@ -236,33 +311,44 @@ function processAssetSection(
   });
 
   // Sort both arrays by account code or order
-  currentAssets.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code));
-  longTermAssets.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code));
+  currentAssets.sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code)
+  );
+  longTermAssets.sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code)
+  );
 
   // Add subtotals for current assets
-  const currentAssetsTotal = currentAssets.reduce((sum, asset) => sum + asset.amount, 0);
-  if (currentAssets.length > 0) { // Add subtotal only if there are items
+  const currentAssetsTotal = currentAssets.reduce(
+    (sum, asset) => sum + asset.amount,
+    0
+  );
+  if (currentAssets.length > 0) {
+    // Add subtotal only if there are items
     currentAssets.push({
-      code: 'TOTAL_CURRENT_ASSETS',
-      name: 'Total Current Assets',
+      code: "TOTAL_CURRENT_ASSETS",
+      name: "Total Current Assets",
       amount: currentAssetsTotal,
       isCalculated: true,
       order: 999, // Ensure order is high enough for subtotal
-      styleClass: 'subtotal'
+      styleClass: "subtotal",
     });
   }
 
-
   // Add subtotals for long-term assets
-  const longTermAssetsTotal = longTermAssets.reduce((sum, asset) => sum + asset.amount, 0);
-  if (longTermAssets.length > 0) { // Add subtotal only if there are items
+  const longTermAssetsTotal = longTermAssets.reduce(
+    (sum, asset) => sum + asset.amount,
+    0
+  );
+  if (longTermAssets.length > 0) {
+    // Add subtotal only if there are items
     longTermAssets.push({
-      code: 'TOTAL_LONG_TERM_ASSETS',
-      name: 'Total Long-Term Assets',
+      code: "TOTAL_LONG_TERM_ASSETS",
+      name: "Total Long-Term Assets",
       amount: longTermAssetsTotal,
       isCalculated: true,
       order: 999, // Ensure order is high enough for subtotal
-      styleClass: 'subtotal'
+      styleClass: "subtotal",
     });
   }
 
@@ -272,7 +358,7 @@ function processAssetSection(
   return {
     current: currentAssets,
     longTerm: longTermAssets,
-    total: totalAssets
+    total: totalAssets,
   };
 }
 
@@ -284,26 +370,26 @@ function processLiabilitySection(
   previousBalances: AccountBalance[],
   accountMap: Map<string, Account>, // Use the Account type
   includeComparison: boolean
-): { current: ReportLineItem[], longTerm: ReportLineItem[], total: number } {
+): { current: ReportLineItem[]; longTerm: ReportLineItem[]; total: number } {
   // Filter to only liability accounts
-  const liabilityBalances = accountBalances.filter(balance => {
+  const liabilityBalances = accountBalances.filter((balance) => {
     const account = accountMap.get(balance.accountId);
     return account && LIABILITY_ACCOUNT_TYPES.includes(account.type);
   });
 
   const balanceMap = new Map<string, number>();
-  liabilityBalances.forEach(balance => {
+  liabilityBalances.forEach((balance) => {
     balanceMap.set(balance.accountId, balance.balance);
   });
 
   const previousBalanceMap = new Map<string, number>();
   if (includeComparison) {
     previousBalances
-      .filter(balance => {
+      .filter((balance) => {
         const account = accountMap.get(balance.accountId);
         return account && LIABILITY_ACCOUNT_TYPES.includes(account.type);
       })
-      .forEach(balance => {
+      .forEach((balance) => {
         previousBalanceMap.set(balance.accountId, balance.balance);
       });
   }
@@ -311,25 +397,31 @@ function processLiabilitySection(
   const currentLiabilities: ReportLineItem[] = [];
   const longTermLiabilities: ReportLineItem[] = [];
 
-  liabilityBalances.forEach(balance => {
+  liabilityBalances.forEach((balance) => {
     const account = accountMap.get(balance.accountId);
     if (!account) return;
 
     const lineItem: ReportLineItem = {
       accountId: balance.accountId,
-      code: account.code || '',
+      code: account.code || "",
       name: account.name,
       amount: balance.balance, // Liabilities often have credit balances (negative in raw data)
-                               // but are shown as positive on balance sheets. Assuming input `balance` is already correctly signed for display.
-      order: account.displayOrder || 0
+      // but are shown as positive on balance sheets. Assuming input `balance` is already correctly signed for display.
+      order: account.displayOrder || 0,
     };
 
     if (includeComparison) {
-      const previousBalanceValue = previousBalanceMap.get(balance.accountId) || 0;
+      const previousBalanceValue =
+        previousBalanceMap.get(balance.accountId) || 0;
       lineItem.previousAmount = previousBalanceValue;
-      lineItem.percentChange = previousBalanceValue !== 0
-        ? ((balance.balance - previousBalanceValue) / Math.abs(previousBalanceValue)) * 100
-        : balance.balance !== 0 ? 100 : 0;
+      lineItem.percentChange =
+        previousBalanceValue !== 0
+          ? ((balance.balance - previousBalanceValue) /
+              Math.abs(previousBalanceValue)) *
+            100
+          : balance.balance !== 0
+            ? 100
+            : 0;
     }
 
     if (CURRENT_LIABILITY_TYPES.includes(account.type)) {
@@ -339,30 +431,40 @@ function processLiabilitySection(
     }
   });
 
-  currentLiabilities.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code));
-  longTermLiabilities.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code));
+  currentLiabilities.sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code)
+  );
+  longTermLiabilities.sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code)
+  );
 
-  const currentLiabilitiesTotal = currentLiabilities.reduce((sum, liability) => sum + liability.amount, 0);
+  const currentLiabilitiesTotal = currentLiabilities.reduce(
+    (sum, liability) => sum + liability.amount,
+    0
+  );
   if (currentLiabilities.length > 0) {
     currentLiabilities.push({
-      code: 'TOTAL_CURRENT_LIABILITIES',
-      name: 'Total Current Liabilities',
+      code: "TOTAL_CURRENT_LIABILITIES",
+      name: "Total Current Liabilities",
       amount: currentLiabilitiesTotal,
       isCalculated: true,
       order: 999,
-      styleClass: 'subtotal'
+      styleClass: "subtotal",
     });
   }
 
-  const longTermLiabilitiesTotal = longTermLiabilities.reduce((sum, liability) => sum + liability.amount, 0);
+  const longTermLiabilitiesTotal = longTermLiabilities.reduce(
+    (sum, liability) => sum + liability.amount,
+    0
+  );
   if (longTermLiabilities.length > 0) {
     longTermLiabilities.push({
-      code: 'TOTAL_LONG_TERM_LIABILITIES',
-      name: 'Total Long-Term Liabilities',
+      code: "TOTAL_LONG_TERM_LIABILITIES",
+      name: "Total Long-Term Liabilities",
       amount: longTermLiabilitiesTotal,
       isCalculated: true,
       order: 999,
-      styleClass: 'subtotal'
+      styleClass: "subtotal",
     });
   }
 
@@ -371,7 +473,7 @@ function processLiabilitySection(
   return {
     current: currentLiabilities,
     longTerm: longTermLiabilities,
-    total: totalLiabilities
+    total: totalLiabilities,
   };
 }
 
@@ -383,72 +485,83 @@ function processEquitySection(
   previousBalances: AccountBalance[],
   accountMap: Map<string, Account>, // Use the Account type
   includeComparison: boolean
-): { items: ReportLineItem[], total: number } {
-  const equityBalances = accountBalances.filter(balance => {
+): { items: ReportLineItem[]; total: number } {
+  const equityBalances = accountBalances.filter((balance) => {
     const account = accountMap.get(balance.accountId);
     return account && EQUITY_ACCOUNT_TYPES.includes(account.type);
   });
 
   const balanceMap = new Map<string, number>();
-  equityBalances.forEach(balance => {
+  equityBalances.forEach((balance) => {
     balanceMap.set(balance.accountId, balance.balance);
   });
 
   const previousBalanceMap = new Map<string, number>();
   if (includeComparison) {
     previousBalances
-      .filter(balance => {
+      .filter((balance) => {
         const account = accountMap.get(balance.accountId);
         return account && EQUITY_ACCOUNT_TYPES.includes(account.type);
       })
-      .forEach(balance => {
+      .forEach((balance) => {
         previousBalanceMap.set(balance.accountId, balance.balance);
       });
   }
 
   const equityItems: ReportLineItem[] = [];
 
-  equityBalances.forEach(balance => {
+  equityBalances.forEach((balance) => {
     const account = accountMap.get(balance.accountId);
     if (!account) return;
 
     const lineItem: ReportLineItem = {
       accountId: balance.accountId,
-      code: account.code || '',
+      code: account.code || "",
       name: account.name,
       amount: balance.balance, // Equity usually has credit balances. Similar to liabilities, assuming correct sign for display.
-      order: account.displayOrder || 0
+      order: account.displayOrder || 0,
     };
 
     if (includeComparison) {
-      const previousBalanceValue = previousBalanceMap.get(balance.accountId) || 0;
+      const previousBalanceValue =
+        previousBalanceMap.get(balance.accountId) || 0;
       lineItem.previousAmount = previousBalanceValue;
-      lineItem.percentChange = previousBalanceValue !== 0
-        ? ((balance.balance - previousBalanceValue) / Math.abs(previousBalanceValue)) * 100
-        : balance.balance !== 0 ? 100 : 0;
+      lineItem.percentChange =
+        previousBalanceValue !== 0
+          ? ((balance.balance - previousBalanceValue) /
+              Math.abs(previousBalanceValue)) *
+            100
+          : balance.balance !== 0
+            ? 100
+            : 0;
     }
 
     equityItems.push(lineItem);
   });
 
-  equityItems.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code));
+  equityItems.sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.code.localeCompare(b.code)
+  );
 
-  const totalEquity = equityItems.reduce((sum, equity) => sum + equity.amount, 0);
+  const totalEquity = equityItems.reduce(
+    (sum, equity) => sum + equity.amount,
+    0
+  );
 
   if (equityItems.length > 0) {
     equityItems.push({
-      code: 'TOTAL_EQUITY',
-      name: 'Total Equity',
+      code: "TOTAL_EQUITY",
+      name: "Total Equity",
       amount: totalEquity,
       isCalculated: true,
       order: 999,
-      styleClass: 'subtotal'
+      styleClass: "subtotal",
     });
   }
 
   return {
     items: equityItems,
-    total: totalEquity
+    total: totalEquity,
   };
 }
 
@@ -459,18 +572,27 @@ function processEquitySection(
  * @param currencyCode Currency code to use for formatting
  * @returns Formatted balance sheet report
  */
-export function formatBalanceSheet(report: BalanceSheetReport, currencyCode?: string): BalanceSheetReport {
+export function formatBalanceSheet(
+  report: BalanceSheetReport,
+  currencyCode?: string
+): BalanceSheetReport {
   // Create a deep copy to avoid modifying the original
-  const formattedReport = JSON.parse(JSON.stringify(report)) as BalanceSheetReport;
-  const resolvedCurrencyCode = currencyCode || formattedReport.currencyCode || 'USD';
+  const formattedReport = JSON.parse(
+    JSON.stringify(report)
+  ) as BalanceSheetReport;
+  const resolvedCurrencyCode =
+    currencyCode || formattedReport.currencyCode || "USD";
 
   // Helper function to format items
   const formatLineItems = (items: ReportLineItem[]) => {
-    items.forEach(item => {
+    items.forEach((item) => {
       // Ensure item.formattedAmount etc. are assignable by checking if ReportLineItem includes them (which it does now)
       item.formattedAmount = formatCurrency(item.amount, resolvedCurrencyCode);
       if (item.previousAmount !== undefined) {
-        item.formattedPreviousAmount = formatCurrency(item.previousAmount, resolvedCurrencyCode);
+        item.formattedPreviousAmount = formatCurrency(
+          item.previousAmount,
+          resolvedCurrencyCode
+        );
       }
       if (item.percentChange !== undefined) {
         item.formattedPercentChange = `${item.percentChange.toFixed(2)}%`;
@@ -502,14 +624,25 @@ export function formatBalanceSheet(report: BalanceSheetReport, currencyCode?: st
 export function calculateWorkingCapital(report: BalanceSheetReport): number {
   const currentAssets = report.assets.current;
   // The subtotal line item is 'Total Current Assets'
-  const totalCurrentAssetsItem = currentAssets.find(item => item.code === 'TOTAL_CURRENT_ASSETS');
-  const totalCurrentAssets = totalCurrentAssetsItem ? totalCurrentAssetsItem.amount : currentAssets.filter(item => !item.isCalculated).reduce((sum, item) => sum + item.amount, 0);
-
+  const totalCurrentAssetsItem = currentAssets.find(
+    (item) => item.code === "TOTAL_CURRENT_ASSETS"
+  );
+  const totalCurrentAssets = totalCurrentAssetsItem
+    ? totalCurrentAssetsItem.amount
+    : currentAssets
+        .filter((item) => !item.isCalculated)
+        .reduce((sum, item) => sum + item.amount, 0);
 
   const currentLiabilities = report.liabilities.current;
   // The subtotal line item is 'Total Current Liabilities'
-  const totalCurrentLiabilitiesItem = currentLiabilities.find(item => item.code === 'TOTAL_CURRENT_LIABILITIES');
-  const totalCurrentLiabilities = totalCurrentLiabilitiesItem ? totalCurrentLiabilitiesItem.amount : currentLiabilities.filter(item => !item.isCalculated).reduce((sum, item) => sum + item.amount, 0);
+  const totalCurrentLiabilitiesItem = currentLiabilities.find(
+    (item) => item.code === "TOTAL_CURRENT_LIABILITIES"
+  );
+  const totalCurrentLiabilities = totalCurrentLiabilitiesItem
+    ? totalCurrentLiabilitiesItem.amount
+    : currentLiabilities
+        .filter((item) => !item.isCalculated)
+        .reduce((sum, item) => sum + item.amount, 0);
 
   return totalCurrentAssets - totalCurrentLiabilities;
 }
@@ -520,42 +653,52 @@ export function calculateWorkingCapital(report: BalanceSheetReport): number {
  * @param report Balance sheet report
  * @returns Object containing financial ratios (values can be number or undefined)
  */
-export function calculateBalanceSheetRatios(report: BalanceSheetReport): Record<string, number | undefined> {
+export function calculateBalanceSheetRatios(
+  report: BalanceSheetReport
+): Record<string, number | undefined> {
   const totalAssets = report.assets.total;
   const totalLiabilities = report.liabilities.total;
   const totalEquity = report.equity.total;
 
   const currentAssets = report.assets.current;
-  const totalCurrentAssetsItem = currentAssets.find(item => item.code === 'TOTAL_CURRENT_ASSETS');
-  const totalCurrentAssets = totalCurrentAssetsItem ? totalCurrentAssetsItem.amount : currentAssets.filter(item => !item.isCalculated).reduce((sum, item) => sum + item.amount, 0);
-
+  const totalCurrentAssetsItem = currentAssets.find(
+    (item) => item.code === "TOTAL_CURRENT_ASSETS"
+  );
+  const totalCurrentAssets = totalCurrentAssetsItem
+    ? totalCurrentAssetsItem.amount
+    : currentAssets
+        .filter((item) => !item.isCalculated)
+        .reduce((sum, item) => sum + item.amount, 0);
 
   const currentLiabilities = report.liabilities.current;
-  const totalCurrentLiabilitiesItem = currentLiabilities.find(item => item.code === 'TOTAL_CURRENT_LIABILITIES');
-  const totalCurrentLiabilities = totalCurrentLiabilitiesItem ? totalCurrentLiabilitiesItem.amount : currentLiabilities.filter(item => !item.isCalculated).reduce((sum, item) => sum + item.amount, 0);
+  const totalCurrentLiabilitiesItem = currentLiabilities.find(
+    (item) => item.code === "TOTAL_CURRENT_LIABILITIES"
+  );
+  const totalCurrentLiabilities = totalCurrentLiabilitiesItem
+    ? totalCurrentLiabilitiesItem.amount
+    : currentLiabilities
+        .filter((item) => !item.isCalculated)
+        .reduce((sum, item) => sum + item.amount, 0);
 
-  const currentRatio = totalCurrentLiabilities !== 0
-    ? totalCurrentAssets / totalCurrentLiabilities
-    : undefined;
+  const currentRatio =
+    totalCurrentLiabilities !== 0
+      ? totalCurrentAssets / totalCurrentLiabilities
+      : undefined;
 
-  const debtToEquityRatio = totalEquity !== 0
-    ? totalLiabilities / totalEquity
-    : undefined;
+  const debtToEquityRatio =
+    totalEquity !== 0 ? totalLiabilities / totalEquity : undefined;
 
-  const debtRatio = totalAssets !== 0
-    ? totalLiabilities / totalAssets
-    : undefined;
+  const debtRatio =
+    totalAssets !== 0 ? totalLiabilities / totalAssets : undefined;
 
-  const equityRatio = totalAssets !== 0
-    ? totalEquity / totalAssets
-    : undefined;
+  const equityRatio = totalAssets !== 0 ? totalEquity / totalAssets : undefined;
 
   const workingCapital = totalCurrentAssets - totalCurrentLiabilities;
 
   return {
     currentRatio: currentRatio,
     quickRatio: undefined, // Would need inventory data (from AccountBalance or specific accounts) to calculate
-    cashRatio: undefined,  // Would need cash data (from AccountBalance or specific accounts) to calculate
+    cashRatio: undefined, // Would need cash data (from AccountBalance or specific accounts) to calculate
     debtToEquityRatio: debtToEquityRatio,
     debtRatio: debtRatio,
     equityRatio: equityRatio,
@@ -567,5 +710,5 @@ export default {
   generateBalanceSheet,
   formatBalanceSheet,
   calculateWorkingCapital,
-  calculateBalanceSheetRatios
+  calculateBalanceSheetRatios,
 };

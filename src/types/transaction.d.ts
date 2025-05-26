@@ -1,23 +1,51 @@
 // src/types/transaction.d.ts
-
 /**
  * Status of a financial transaction
  */
 export type TransactionStatus = 'pending' | 'posted' | 'voided';
 
 /**
- * Categorizes transactions by their business purpose
+ * Categorizes transactions by their business purpose, including real estate.
  */
-export type TransactionType = 
-  | 'general' 
-  | 'invoice' 
-  | 'payment' 
-  | 'expense' 
-  | 'transfer' 
+export type TransactionType =
+  | 'general'
+  | 'invoice'
+  | 'payment'
+  | 'expense'
+  | 'transfer'
   | 'adjustment'
   | 'opening_balance'
   | 'loan_payment'
-  | 'depreciation';
+  | 'depreciation'
+  // Real estate specific:
+  | 'rent_income'
+  | 'security_deposit'
+  | 'security_deposit_return'
+  | 'maintenance'
+  | 'property_tax'
+  | 'insurance'
+  | 'hoa_fee'
+  | 'commission'
+  | 'closing_cost'
+  | 'capital_improvement'
+  | 'utility_payment'
+  | 'property_management_fee';
+
+/**
+ * Reconciliation details for a transaction
+ */
+export interface ReconciliationInfo {
+  /** Bank statement reference */
+  bank_reference?: string;
+  /** Date reconciled (Unix timestamp, seconds) */
+  reconciled_date?: number;
+  /** User who reconciled */
+  reconciled_by?: string;
+  /** Bank statement date */
+  statement_date?: number;
+  /** Reconciliation batch ID if part of bulk reconciliation */
+  batch_id?: string;
+}
 
 /**
  * Represents a financial transaction header.
@@ -54,6 +82,8 @@ export interface Transaction {
   updated_at: number;
   /** Transaction lines (debits and credits) - available when full transaction is fetched */
   lines?: TransactionLine[];
+  /** Reconciliation details if reconciled */
+  reconciliation_info?: ReconciliationInfo;
 }
 
 /**
@@ -79,51 +109,38 @@ export interface TransactionLine {
   readonly tax_code?: string | null;
   /** Optional metadata for custom properties */
   readonly metadata?: Record<string, unknown> | null;
+  /** Property/sub-entity this line relates to (for property-level tracking) */
+  property_id?: string | null;
 }
 
 /**
  * Input payload for creating a single transaction line.
  */
 export interface TransactionLineInput {
-  /** ID of the entity account to debit or credit (required) */
   entity_account_id: string;
-  /** Amount for this line item (required, always positive) */
   amount: number;
-  /** Whether this is a debit (true) or credit (false) (required) */
   is_debit: boolean;
-  /** Optional line-specific description */
   memo?: string | null;
-  /** Optional tax code or category for reporting */
   tax_code?: string | null;
-  /** Optional metadata for custom properties */
   metadata?: Record<string, unknown> | null;
+  /** Property/sub-entity this line relates to */
+  property_id?: string | null;
 }
 
 /**
  * Input payload for creating a new Transaction with its lines.
  */
 export interface TransactionInput {
-  /** ID of the entity this transaction belongs to (required) */
   entity_id: string;
-  /** Optional link to a journal that groups related transactions */
   journal_id?: string | null;
-  /** Date of the transaction in Unix timestamp seconds (required) */
   date: number;
-  /** Description of the transaction purpose (required) */
   description: string;
-  /** Optional external reference (check number, invoice ID, etc.) */
   reference?: string | null;
-  /** Initial status (defaults to 'pending' if not specified) */
   status?: TransactionStatus;
-  /** Whether this transaction has been reconciled (defaults to false) */
   is_reconciled?: boolean;
-  /** Optional URL to supporting documentation */
   document_url?: string | null;
-  /** Business purpose classification */
   transaction_type?: TransactionType;
-  /** ID of related entity if applicable */
   related_entity_id?: string | null;
-  /** Transaction lines (at least two lines required, must balance) */
   lines: TransactionLineInput[];
 }
 
@@ -131,33 +148,20 @@ export interface TransactionInput {
  * Parameters for querying transactions
  */
 export interface TransactionQueryParams {
-  /** Filter by entity ID */
   entity_id?: string;
-  /** Filter by start date (inclusive, Unix timestamp seconds) */
   start_date?: number;
-  /** Filter by end date (inclusive, Unix timestamp seconds) */
   end_date?: number;
-  /** Filter by transaction status */
   status?: TransactionStatus;
-  /** Filter by reconciliation status */
   is_reconciled?: boolean;
-  /** Filter by specific account involvement */
   account_id?: string;
-  /** Filter by minimum amount */
   min_amount?: number;
-  /** Filter by maximum amount */
   max_amount?: number;
-  /** Search in description or reference */
   search?: string;
-  /** Filter by transaction type */
   transaction_type?: TransactionType;
-  /** Limit the number of results */
+  property_id?: string;
   limit?: number;
-  /** Offset for pagination */
   offset?: number;
-  /** Sort direction */
   sort_direction?: 'asc' | 'desc';
-  /** Sort field */
   sort_by?: 'date' | 'amount' | 'description' | 'created_at';
 }
 
@@ -165,15 +169,10 @@ export interface TransactionQueryParams {
  * Balance summary for an account or entity
  */
 export interface BalanceSummary {
-  /** Total debits for the period */
   total_debits: number;
-  /** Total credits for the period */
   total_credits: number;
-  /** Net change for the period (positive for debit increase, negative for credit increase) */
   net_change: number;
-  /** Opening balance at the start of the period */
   opening_balance: number;
-  /** Closing balance at the end of the period */
   closing_balance: number;
 }
 
@@ -181,17 +180,104 @@ export interface BalanceSummary {
  * Transaction with calculated impact on relevant accounts
  */
 export interface TransactionWithBalances extends Transaction {
-  /** Calculated impacts on account balances */
   balance_impacts: Array<{
-    /** Account ID */
     entity_account_id: string;
-    /** Account code */
     account_code: string;
-    /** Account name */
     account_name: string;
-    /** Net change to the account (positive for debit increase, negative for credit increase) */
     net_change: number;
-    /** New balance after this transaction */
     new_balance: number;
   }>;
+}
+
+/**
+ * Result of a bulk transaction operation
+ */
+export interface BulkTransactionResult {
+  /** Successfully created transaction IDs */
+  successful: string[];
+  /** Failed transactions with error details */
+  failed: Array<{
+    index: number;
+    error: string;
+    data?: TransactionInput;
+  }>;
+  /** Total processed */
+  total: number;
+  /** Success count */
+  successCount: number;
+}
+
+/**
+ * Transaction import mapping configuration
+ */
+export interface TransactionImportMapping {
+  dateColumn: string;
+  descriptionColumn: string;
+  amountColumn: string;
+  debitColumn?: string;
+  creditColumn?: string;
+  referenceColumn?: string;
+  accountMapping?: Record<string, string>;
+}
+
+/**
+ * Imported transaction before processing
+ */
+export interface ImportedTransaction {
+  rowNumber: number;
+  rawData: Record<string, any>;
+  parsed?: TransactionInput;
+  errors?: string[];
+  suggestedAccounts?: Array<{
+    accountId: string;
+    confidence: number;
+  }>;
+}
+
+/**
+ * Journal entry grouping related transactions
+ */
+export interface Journal {
+  id: string;
+  user_id: string;
+  entity_id: string;
+  name: string;
+  date: number;
+  type?: 'general' | 'closing' | 'adjusting' | 'recurring';
+  transactions?: Transaction[];
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Type guards for transactions
+ */
+export function isRentTransaction(transaction: Transaction): boolean {
+  return transaction.transaction_type === 'rent_income';
+}
+
+export function isMaintenanceTransaction(transaction: Transaction): boolean {
+  return transaction.transaction_type === 'maintenance';
+}
+
+export function isPropertyRelatedTransaction(transaction: Transaction): boolean {
+  const propertyTypes: TransactionType[] = [
+    'rent_income',
+    'security_deposit',
+    'security_deposit_return',
+    'maintenance',
+    'property_tax',
+    'insurance',
+    'hoa_fee',
+    'commission',
+    'closing_cost',
+    'capital_improvement',
+    'utility_payment',
+    'property_management_fee'
+  ];
+  return transaction.transaction_type ? propertyTypes.includes(transaction.transaction_type) : false;
+}
+
+export function hasPropertyAllocation(transaction: Transaction): boolean {
+  return transaction.lines?.some(line => line.property_id != null) ?? false;
 }

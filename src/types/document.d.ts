@@ -1,7 +1,7 @@
 // src/types/document.d.ts
 /**
  * Document type definitions
- * 
+ *
  * This module defines TypeScript interfaces for document management
  * including metadata, storage, permissions, and processing states
  * specific to financial and accounting documents.
@@ -14,93 +14,93 @@
 /**
  * All supported document types
  */
-export type DocumentType = 
+export type DocumentType =
   // Financial documents
-  | 'invoice' 
-  | 'receipt'
-  | 'bank-statement'
-  | 'credit-card-statement'
-  | 'loan-agreement'
-  | 'loan-statement'
-  
+  | "invoice"
+  | "receipt"
+  | "bank-statement"
+  | "credit-card-statement"
+  | "loan-agreement"
+  | "loan-statement"
+
   // Tax documents
-  | 'tax-return'
-  | 'w2'
-  | 'w9'
-  | '1099'
-  | 'k1'
-  
+  | "tax-return"
+  | "w2"
+  | "w9"
+  | "1099"
+  | "k1"
+
   // Legal documents
-  | 'contract'
-  | 'lease-agreement'
-  | 'incorporation-document'
-  | 'business-license'
-  
+  | "contract"
+  | "lease-agreement"
+  | "incorporation-document"
+  | "business-license"
+
   // Entity documents
-  | 'chart-of-accounts'
-  | 'financial-statement'
-  | 'audit-report'
-  
+  | "chart-of-accounts"
+  | "financial-statement"
+  | "audit-report"
+
   // Other document types
-  | 'policy'
-  | 'correspondence'
-  | 'general-attachment'
-  | 'custom';
+  | "policy"
+  | "correspondence"
+  | "general-attachment"
+  | "custom";
 
 /**
  * Document categories for organization
  */
 export type DocumentCategory =
-  | 'financial'
-  | 'tax'
-  | 'legal'
-  | 'entity'
-  | 'compliance'
-  | 'correspondence'
-  | 'other';
+  | "financial"
+  | "tax"
+  | "legal"
+  | "entity"
+  | "compliance"
+  | "correspondence"
+  | "other";
 
 /**
  * Document storage provider
  */
-export type StorageProvider = 
-  | 'local'
-  | 'cloudflare-r2'
-  | 'aws-s3'
-  | 'google-drive'
-  | 'onedrive'
-  | 'dropbox';
+export type StorageProvider =
+  | "local"
+  | "cloudflare-r2"
+  | "aws-s3"
+  | "google-drive"
+  | "onedrive"
+  | "dropbox";
 
 /**
  * Document file format
  */
-export type DocumentFormat = 
-  | 'pdf'
-  | 'docx'
-  | 'xlsx'
-  | 'csv'
-  | 'txt'
-  | 'png'
-  | 'jpg'
-  | 'jpeg'
-  | 'tiff'
-  | 'html'
-  | 'xml'
-  | 'json'
-  | 'zip'
-  | 'other';
+export type DocumentFormat =
+  | "pdf"
+  | "docx"
+  | "xlsx"
+  | "csv"
+  | "txt"
+  | "png"
+  | "jpg"
+  | "jpeg"
+  | "tiff"
+  | "html"
+  | "xml"
+  | "json"
+  | "zip"
+  | "other";
 
 /**
  * Document processing status
  */
-export type DocumentProcessingStatus = 
-  | 'pending'        // Uploaded but not processed
-  | 'processing'     // Currently being processed
-  | 'processed'      // Successfully processed
-  | 'error'          // Error in processing
-  | 'needs-review'   // Human review needed
-  | 'approved'       // Approved after review
-  | 'rejected'       // Rejected after review
-  | 'archived';      // Archived document
+export type DocumentProcessingStatus =
+  | "pending" // Uploaded but not processed
+  | "processing" // Currently being processed
+  | "processed" // Successfully processed
+  | "error" // Error in processing
+  | "needs-review" // Human review needed
+  | "approved" // Approved after review
+  | "rejected" // Rejected after review
+  | "archived"; // Archived document
 
 // ----------------
 // Core Document Interfaces
@@ -194,7 +194,7 @@ export interface DocumentAccess {
   /** Audit trail of access events */
   accessLog?: Array<{
     userId: string;
-    action: 'view' | 'download' | 'edit' | 'delete' | 'share';
+    action: "view" | "download" | "edit" | "delete" | "share";
     timestamp: string;
     ip?: string;
   }>;
@@ -203,12 +203,12 @@ export interface DocumentAccess {
 /**
  * Permission level for document access
  */
-export type DocumentPermission = 
-  | 'view'       // Can only view
-  | 'download'   // Can view and download
-  | 'edit'       // Can view, download, and edit
-  | 'manage'     // Can view, download, edit, and manage permissions
-  | 'owner';     // Full control
+export type DocumentPermission =
+  | "view" // Can only view
+  | "download" // Can view and download
+  | "edit" // Can view, download, and edit
+  | "manage" // Can view, download, edit, and manage permissions
+  | "owner"; // Full control
 
 /**
  * Complete document record
@@ -365,7 +365,7 @@ export interface InvoiceDocumentData {
   /** Payment terms */
   paymentTerms?: string;
   /** Payment status */
-  paymentStatus?: 'unpaid' | 'partial' | 'paid';
+  paymentStatus?: "unpaid" | "partial" | "paid";
   /** Payment amount if partially paid */
   paidAmount?: number;
   /** Payment date if paid */
@@ -478,8 +478,8 @@ export interface DocumentSearchParams {
   contentQuery?: string;
   /** Sorting options */
   sort?: {
-    field: 'name' | 'createdAt' | 'updatedAt' | 'size';
-    direction: 'asc' | 'desc';
+    field: "name" | "createdAt" | "updatedAt" | "size";
+    direction: "asc" | "desc";
   };
   /** Pagination */
   pagination?: {
@@ -521,8 +521,11 @@ export interface DocumentBatchResult {
   /** Error count */
   errorCount: number;
   /** Results by document ID */
-  results: Record<string, {
-    success: boolean;
-    error?: string;
-  }>;
+  results: Record<
+    string,
+    {
+      success: boolean;
+      error?: string;
+    }
+  >;
 }

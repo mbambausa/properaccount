@@ -1,17 +1,12 @@
 ---
-// src/components/layout/AppLayout.astro - Main layout for authenticated pages
-
-// Import components and dependencies
-import '@/styles/global.css';
-import ThemeScript from '@/components/theme/ThemeScript.astro';
-import ThemeToggle from '@/components/theme/ThemeToggle.astro';
-import DebugTools from '@/components/dev/DebugTools.astro';
-import ViewTransitions from '@/components/layout/ViewTransitions.astro';
-import ToastContainer from '@/components/ui/ToastContainer.astro';
+// src/components/layout/AppLayout.astro
+import BaseLayout from './BaseLayout.astro';
+import Header from './Header.astro'; // Using the extracted Header component
+// Footer is kept inline for now as it's specific to AppLayout
+import ToastContainer from '@/components/ui/Toast.astro';
 import Sidebar from './Sidebar.astro';
 import type { User } from '@/types/auth';
 
-// Define component props
 export interface Props {
   title: string;
   description?: string;
@@ -19,103 +14,67 @@ export interface Props {
   contentWidth?: 'narrow' | 'standard' | 'wide' | 'full';
   headerBorder?: boolean;
   showPageHeader?: boolean;
+  isSidebarCollapsedInitial?: boolean;
 }
 
 const {
   title,
-  description = 'ProperAccount - Real Estate Accounting Application',
+  description,
   user,
   contentWidth = 'standard',
   headerBorder = true,
   showPageHeader = true,
+  isSidebarCollapsedInitial = false,
 } = Astro.props;
 
-// Get current path for sidebar highlighting
 const currentPath = Astro.url.pathname;
-
-// REVISED: Use --current-sidebar-width which is dynamically set by Sidebar.astro's Alpine.js logic
 const sidebarPaddingClass = 'lg:pl-[var(--current-sidebar-width)]';
 
-// Content width classes map
 const contentWidthClasses = {
   narrow: 'max-w-4xl',
   standard: 'max-w-7xl',
   wide: 'max-w-screen-2xl',
-  full: 'w-full'
+  full: 'w-full max-w-full'
 };
+
+const appVersion = import.meta.env.PUBLIC_APP_VERSION || '0.1.0'; 
 ---
 
-<!DOCTYPE html>
-<html lang="en" class="h-full font-sans">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content={description}>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <title>{title} | ProperAccount</title>
-    <ThemeScript />
-    <ViewTransitions />
-    <DebugTools />
-  </head>
-  <body class="h-full bg-neutral-50 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 antialiased">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-white dark:focus:bg-neutral-800 focus:text-primary-600 focus:top-0 focus:left-0">
-      Skip to main content
-    </a>
-    
-    <div class="flex h-full">
-      <Sidebar user={user} currentPath={currentPath} />
+<BaseLayout title={title} description={description}>
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-white dark:focus:bg-neutral-800 focus:text-primary-600 focus:top-0 focus:left-0">
+    Skip to main content
+  </a>
+  
+  <div class="flex h-full">
+    <Sidebar user={user} currentPath={currentPath} isCollapsedInitial={isSidebarCollapsedInitial} />
 
-      {/* Main content area - ID for potential JS targeting if sidebar collapses */}
-      {/* REVISED: Added transition-all for smooth padding adjustment */}
-      <div id="main-content-area" class:list={[
-        "flex-1 flex flex-col transition-all duration-300 ease-in-out",
-        sidebarPaddingClass
-      ]}>
-        {showPageHeader && (
-          <header class:list={[
-            "sticky top-0 z-10 w-full h-[var(--header-height)] flex items-center justify-between px-4 lg:px-8 bg-white/75 dark:bg-neutral-800/75 backdrop-blur-md",
-            headerBorder ? "border-b border-neutral-200 dark:border-neutral-700" : "",
-            "shadow-sm"
-          ]}>
-            <h1 class="text-xl font-semibold text-neutral-900 dark:text-white truncate">
-              {title}
-            </h1>
+    <div id="main-content-area" class:list={[
+      "flex-1 flex flex-col transition-all duration-300 ease-in-out",
+      sidebarPaddingClass
+    ]}>
+      {showPageHeader && (
+        <Header title={title} headerBorder={headerBorder} />
+      )}
 
-            <div class="flex items-center space-x-4">
-              <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150" aria-label="Search">
-                <div class="i-carbon-search h-5 w-5"></div>
-                <span class="sr-only">Search</span>
-              </button>
-              
-              <button class="p-1.5 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150" aria-label="Notifications">
-                <div class="i-carbon-notification h-5 w-5"></div>
-                <span class="sr-only">Notifications</span>
-              </button>
-              
-              <ThemeToggle />
-            </div>
-          </header>
-        )}
-
-        <main id="main-content" class="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div class={`${contentWidthClasses[contentWidth]} mx-auto`}>
-            <slot />
+      <main id="main-content" class="flex-1 overflow-y-auto p-4 lg:p-6 xl:p-8">
+        <div class:list={[contentWidthClasses[contentWidth], "mx-auto"]}>
+          <slot />
+        </div>
+      </main>
+      
+      <footer role="contentinfo" class="bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 py-4 px-4 lg:px-6 xl:px-8 text-sm print:hidden">
+        <div class:list={[contentWidthClasses[contentWidth], "mx-auto flex flex-col sm:flex-row justify-between items-center gap-2"]}>
+          <div class="text-neutral-500 dark:text-neutral-400">
+            &copy; {new Date().getFullYear()} ProperAccount. All rights reserved.
           </div>
-        </main>
-        
-        <footer class="bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 py-4 px-4 lg:px-8 text-sm">
-          <div class={`${contentWidthClasses[contentWidth]} mx-auto flex flex-col sm:flex-row justify-between items-center gap-2`}>
-            <div class="text-neutral-500 dark:text-neutral-400">
-              &copy; {new Date().getFullYear()} ProperAccount. All rights reserved.
-            </div>
-            <div class="text-neutral-500 dark:text-neutral-400">
-              Version: 0.1.0 (Phase 1)
-            </div>
+          <div class="text-neutral-500 dark:text-neutral-400">
+            Version: {appVersion}
           </div>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </div>
+  </div>
 
-    <ToastContainer />
-  </body>
-</html>
+  <ToastContainer />
+  {/* Initial theme script removed; now handled by BaseLayout */}
+</BaseLayout>

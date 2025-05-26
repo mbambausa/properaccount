@@ -1,0 +1,16 @@
+{
+  "buckets": [
+    {
+      "binding": "DOCUMENTS_BUCKET",
+      "name": "properaccount-documents-prod",
+      "description": "User-uploaded financial documents",
+      "cors": {
+        "allowedOrigins": ["http://localhost:4321", "https://properaccount.pages.dev"],
+        "allowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+        "allowedHeaders": ["Content-Type", "Authorization", "X-CSRF-Token", "X-File-Name", "X-File-Type"],
+        "exposeHeaders": ["ETag"],
+        "maxAge": 3600
+      }
+    }
+  ]
+}

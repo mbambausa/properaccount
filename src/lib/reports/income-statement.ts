@@ -16,7 +16,7 @@ import type {
 import {
   getTransactionTotals,
   getAccountsByType,
-} from "../accounting/accounting-api";
+} from "../accounting/core/accounting-api";
 import { formatCurrency, formatPercent } from "../../utils/format";
 import type { D1Database } from "@cloudflare/workers-types";
 

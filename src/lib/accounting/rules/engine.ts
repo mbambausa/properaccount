@@ -1,16 +1,30 @@
 // src/lib/rules/engine.ts
-import type { Transaction, TransactionLine } from '@lib/accounting/transaction'; // Using path alias for robustness
+import type {
+  Transaction,
+  TransactionLine,
+} from "@/lib/accounting/core/transaction"; // Using path alias for robustness
 
 export interface RuleCondition {
   field: string; // Path to the field in the transaction object (e.g., "description", "amount", "metadata.category")
-  operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'regex' | 'greaterThan' | 'lessThan' | 'isTrue' | 'isFalse' | 'isDefined' | 'isNotDefined';
+  operator:
+    | "equals"
+    | "contains"
+    | "startsWith"
+    | "endsWith"
+    | "regex"
+    | "greaterThan"
+    | "lessThan"
+    | "isTrue"
+    | "isFalse"
+    | "isDefined"
+    | "isNotDefined";
   value?: any; // Value to compare against (not needed for isTrue, isFalse, isDefined, isNotDefined)
   caseSensitive?: boolean; // For string operations
 }
 
 export interface RuleAction {
   accountId: string; // The account ID to use for the categorized line
-  isDebit: boolean;  // Whether the categorized line is a debit
+  isDebit: boolean; // Whether the categorized line is a debit
   description?: string; // Optional description for the categorized line
   metadata?: Record<string, any>; // Optional metadata for the categorized line
   // Future: could include split percentages, multiple lines, etc.
@@ -36,12 +50,11 @@ export interface CategorizableItem {
   date: Date;
   description: string;
   amount: number; // The single amount of the item (e.g., bank withdrawal is positive, deposit is positive)
-  type: 'debit' | 'credit'; // Indicates if the bank item was a debit (money out) or credit (money in) to the bank account
+  type: "debit" | "credit"; // Indicates if the bank item was a debit (money out) or credit (money in) to the bank account
   entityId: string;
   metadata?: Record<string, any>;
   // Potentially other fields like original_payee, bank_transaction_id etc.
 }
-
 
 export class RuleEngine {
   private rules: Rule[];
@@ -57,9 +70,11 @@ export class RuleEngine {
    */
   addRule(rule: Rule): void {
     // Prevent duplicate rule IDs
-    if (this.rules.some(r => r.id === rule.id)) {
-        console.warn(`RuleEngine: Rule with ID [${rule.id}] already exists. Not adding.`);
-        return;
+    if (this.rules.some((r) => r.id === rule.id)) {
+      console.warn(
+        `RuleEngine: Rule with ID [${rule.id}] already exists. Not adding.`
+      );
+      return;
     }
     this.rules.push(rule);
     this.rules.sort((a, b) => b.priority - a.priority); // Re-sort
@@ -70,7 +85,7 @@ export class RuleEngine {
    */
   removeRule(ruleId: string): boolean {
     const initialLength = this.rules.length;
-    this.rules = this.rules.filter(rule => rule.id !== ruleId);
+    this.rules = this.rules.filter((rule) => rule.id !== ruleId);
     // No need to re-sort if only removing
     return this.rules.length !== initialLength;
   }
@@ -87,8 +102,8 @@ export class RuleEngine {
    * Global rules (no entityId) are included.
    */
   getRulesForEntity(entityId: string): Rule[] {
-    return this.rules.filter(rule =>
-      rule.isActive && (!rule.entityId || rule.entityId === entityId)
+    return this.rules.filter(
+      (rule) => rule.isActive && (!rule.entityId || rule.entityId === entityId)
     );
     // Note: this.rules is already sorted by priority
   }
@@ -100,78 +115,108 @@ export class RuleEngine {
     const { operator, value: expectedValue, caseSensitive = false } = condition;
 
     switch (operator) {
-      case 'isDefined':
+      case "isDefined":
         return value !== undefined && value !== null;
-      case 'isNotDefined':
+      case "isNotDefined":
         return value === undefined || value === null;
-      case 'isTrue':
+      case "isTrue":
         return value === true;
-      case 'isFalse':
+      case "isFalse":
         return value === false;
     }
 
     // For operators requiring an expectedValue, if the actual value is undefined/null,
     // it generally shouldn't match unless expectedValue is also undefined/null (for 'equals').
     if (value === undefined || value === null) {
-      return operator === 'equals' && (expectedValue === undefined || expectedValue === null);
+      return (
+        operator === "equals" &&
+        (expectedValue === undefined || expectedValue === null)
+      );
     }
 
-    if (typeof value === 'string' && (typeof expectedValue === 'string' || expectedValue instanceof RegExp)) {
+    if (
+      typeof value === "string" &&
+      (typeof expectedValue === "string" || expectedValue instanceof RegExp)
+    ) {
       const strValue = caseSensitive ? value : value.toLowerCase();
-      const strExpected = (typeof expectedValue === 'string' && !caseSensitive) ? expectedValue.toLowerCase() : expectedValue;
+      const strExpected =
+        typeof expectedValue === "string" && !caseSensitive
+          ? expectedValue.toLowerCase()
+          : expectedValue;
 
       switch (operator) {
-        case 'equals':
+        case "equals":
           return strValue === strExpected;
-        case 'contains':
-          return typeof strExpected === 'string' && strValue.includes(strExpected);
-        case 'startsWith':
-          return typeof strExpected === 'string' && strValue.startsWith(strExpected);
-        case 'endsWith':
-          return typeof strExpected === 'string' && strValue.endsWith(strExpected);
-        case 'regex':
+        case "contains":
+          return (
+            typeof strExpected === "string" && strValue.includes(strExpected)
+          );
+        case "startsWith":
+          return (
+            typeof strExpected === "string" && strValue.startsWith(strExpected)
+          );
+        case "endsWith":
+          return (
+            typeof strExpected === "string" && strValue.endsWith(strExpected)
+          );
+        case "regex":
           // For regex, 'value' is the original string, 'expectedValue' is the pattern string
           try {
-            return new RegExp(expectedValue as string, caseSensitive ? '' : 'i').test(value);
+            return new RegExp(
+              expectedValue as string,
+              caseSensitive ? "" : "i"
+            ).test(value);
           } catch (e) {
-            console.warn(`RuleEngine: Invalid regex pattern "${expectedValue}" in rule condition.`, e);
+            console.warn(
+              `RuleEngine: Invalid regex pattern "${expectedValue}" in rule condition.`,
+              e
+            );
             return false;
           }
         default:
           // If operator is numeric but types are string, try to convert, or return false
-          if (['greaterThan', 'lessThan'].includes(operator) && typeof expectedValue === 'number') {
+          if (
+            ["greaterThan", "lessThan"].includes(operator) &&
+            typeof expectedValue === "number"
+          ) {
             const numValue = parseFloat(value);
             if (!isNaN(numValue)) {
-                return this.evaluateCondition(condition, numValue); // Recurse with numeric value
+              return this.evaluateCondition(condition, numValue); // Recurse with numeric value
             }
           }
           return false; // Operator not applicable to string or type mismatch
       }
     }
 
-    if (typeof value === 'number' && typeof expectedValue === 'number') {
+    if (typeof value === "number" && typeof expectedValue === "number") {
       switch (operator) {
-        case 'equals':
+        case "equals":
           return value === expectedValue;
-        case 'greaterThan':
+        case "greaterThan":
           return value > expectedValue;
-        case 'lessThan':
+        case "lessThan":
           return value < expectedValue;
         default:
           return false; // Operator not applicable to number
       }
     }
-    
-    if (typeof value === 'boolean' && typeof expectedValue === 'boolean' && operator === 'equals') {
-        return value === expectedValue;
+
+    if (
+      typeof value === "boolean" &&
+      typeof expectedValue === "boolean" &&
+      operator === "equals"
+    ) {
+      return value === expectedValue;
     }
 
     // Default comparison for other types if operator is 'equals'
-    if (operator === 'equals') {
-        return value === expectedValue;
+    if (operator === "equals") {
+      return value === expectedValue;
     }
 
-    console.warn(`RuleEngine: Could not evaluate condition for operator "${operator}" with value type "${typeof value}" and expected type "${typeof expectedValue}".`);
+    console.warn(
+      `RuleEngine: Could not evaluate condition for operator "${operator}" with value type "${typeof value}" and expected type "${typeof expectedValue}".`
+    );
     return false;
   }
 
@@ -181,20 +226,22 @@ export class RuleEngine {
    * @returns The matching Rule object or null if no rule matches.
    */
   findMatchingRule(item: CategorizableItem): Rule | null {
-    const applicableRules = this.rules.filter(rule =>
+    const applicableRules = this.rules.filter(
+      (rule) =>
         rule.isActive && (!rule.entityId || rule.entityId === item.entityId)
-      );
+    );
     // this.rules is already sorted by priority in constructor/addRule
 
     for (const rule of applicableRules) {
       let allConditionsMet = true;
-      if (rule.conditions.length === 0) { // Rule with no conditions always matches
+      if (rule.conditions.length === 0) {
+        // Rule with no conditions always matches
         allConditionsMet = true;
       } else {
         for (const condition of rule.conditions) {
           const { field } = condition;
           // Access value from the item. Handles dot notation for nested properties.
-          const valueToTest = field.includes('.')
+          const valueToTest = field.includes(".")
             ? this.getNestedValue(item, field)
             : (item as any)[field];
 
@@ -222,15 +269,27 @@ export class RuleEngine {
    * @param item The item to be categorized.
    * @returns An object representing the transaction line to be created, or null if no rule applies.
    */
-  getRuleApplicationResult(item: CategorizableItem): (Omit<TransactionLine, 'id' | 'transaction_id' | 'created_at' | 'updated_at'> & { ruleId: string }) | null {
+  getRuleApplicationResult(
+    item: CategorizableItem
+  ):
+    | (Omit<
+        TransactionLine,
+        "id" | "transaction_id" | "created_at" | "updated_at"
+      > & { ruleId: string })
+    | null {
     const rule = this.findMatchingRule(item);
 
     if (!rule) {
       return null;
     }
 
-    const { accountId, isDebit, description: ruleActionDescription, metadata } = rule.action;
-    
+    const {
+      accountId,
+      isDebit,
+      description: ruleActionDescription,
+      metadata,
+    } = rule.action;
+
     // The amount for the categorized line is the amount of the bank item.
     // The `isDebit` from the rule action determines if this categorized line is a debit or credit.
     // Example:
@@ -245,10 +304,9 @@ export class RuleEngine {
       isDebit: isDebit,
       description: ruleActionDescription || item.description, // Use rule's desc, fallback to item's
       metadata: metadata,
-      ruleId: rule.id // Include the ID of the rule that matched
+      ruleId: rule.id, // Include the ID of the rule that matched
     };
   }
-
 
   /**
    * Gets a value from an object using a dot-separated path string.
@@ -258,8 +316,10 @@ export class RuleEngine {
    */
   private getNestedValue(obj: any, path: string): any {
     if (!path) return undefined;
-    return path.split('.').reduce((current, key) => {
-      return (current && typeof current === 'object' && key in current) ? current[key] : undefined;
+    return path.split(".").reduce((current, key) => {
+      return current && typeof current === "object" && key in current
+        ? current[key]
+        : undefined;
     }, obj);
   }
 }

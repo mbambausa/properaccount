@@ -1,0 +1,66 @@
+---
+// src/components/layout/AppLayout.astro
+import '@/styles/global.css'; // Import global styles once
+import BaseLayout from './BaseLayout.astro';
+import Header from './Header.astro';
+import ToastContainer from '@/components/ui/Toast.astro';
+import Sidebar from './Sidebar.astro';
+import type { User } from '@/types/auth';
+
+export interface Props {
+  title: string;
+  description?: string;
+  user?: User;
+  contentWidth?: 'narrow' | 'standard' | 'wide' | 'full';
+  headerBorder?: boolean;
+  showPageHeader?: boolean;
+  isSidebarCollapsedInitial?: boolean; // For Sidebar
+}
+
+const {
+  title,
+  description, // Will be passed to BaseLayout
+  user,
+  contentWidth = 'standard',
+  headerBorder = true,
+  showPageHeader = true,
+  isSidebarCollapsedInitial = false, // Default for Sidebar
+} = Astro.props;
+
+const currentPath = Astro.url.pathname;
+const sidebarPaddingClass = 'lg:pl-[var(--current-sidebar-width)]'; // Reactive padding
+
+const contentWidthClasses = { // Kept here if main content area still needs it directly
+  narrow: 'max-w-4xl',
+  standard: 'max-w-7xl',
+  wide: 'max-w-screen-2xl',
+  full: 'w-full max-w-full'
+};
+---
+
+<BaseLayout title={title} description={description}>
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-white dark:focus:bg-neutral-800 focus:text-primary-600 focus:top-0 focus:left-0">
+    Skip to main content
+  </a>
+  
+  <div class="flex h-full">
+    <Sidebar user={user} currentPath={currentPath} isCollapsedInitial={isSidebarCollapsedInitial} />
+
+    <div id="main-content-area" class:list={[
+      "flex-1 flex flex-col transition-all duration-300 ease-in-out",
+      sidebarPaddingClass
+    ]}>
+      {showPageHeader && (
+        <Header title={title} headerBorder={headerBorder} />
+      )}
+
+      <main id="main-content" class="flex-1 overflow-y-auto p-4 lg:p-6 xl:p-8">
+        <div class:list={[contentWidthClasses[contentWidth], "mx-auto"]}>
+          <slot />
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <ToastContainer />
+</BaseLayout>

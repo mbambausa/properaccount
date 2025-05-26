@@ -1,38 +1,31 @@
 ---
-// src/components/auth/SignoutButton.astro
+// src/components/auth/SignOutButton.astro
 import Button from '@components/ui/Button.astro';
+import type { ButtonVariant, ButtonSize } from '@components/ui/Button.astro'; // Import types from Button.astro
 
-// Assuming Button.astro exports these types or they are globally available.
-// If Button.astro exports them, you might import them like:
-// import type { ButtonVariant, ButtonSize } from '@components/ui/Button.astro';
-// For now, we'll define them as they likely are, or as SignoutButton intends to use them.
-// The key is to remove the overly broad `| string`.
-
-type SignoutButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger'; // Define allowed variants
-type SignoutButtonSize = 'sm' | 'md' | 'lg'; // Define allowed sizes
+// Define more specific types for this component's props, ensuring they are a subset
+// of what Button.astro accepts, or exactly matching if all variants/sizes are allowed.
+type SignOutButtonAllowedVariant = Extract<ButtonVariant, 'primary' | 'secondary' | 'outline' | 'danger' | 'text'>;
+type SignOutButtonAllowedSize = Extract<ButtonSize, 'xs' | 'sm' | 'md' | 'lg' | 'xl'>;
 
 interface Props {
-  /** The visual style of the button. */
-  variant?: SignoutButtonVariant; // Use the more specific type
-  /** The size of the button. */
-  size?: SignoutButtonSize; // Use the more specific type
-  /** The text displayed on the button. */
+  variant?: SignOutButtonAllowedVariant;
+  size?: SignOutButtonAllowedSize;
   text?: string;
-  /** The URL to redirect to after successful sign-out. Defaults to '/auth/signin'. */
   callbackUrl?: string;
-  /** Additional CSS classes to apply to the form element. */
   formClass?: string;
+  class?: string; // Allow passing class to the Button component itself
 }
 
 const {
-  variant = 'danger', // Default to 'danger' style for sign-out actions
+  variant = 'secondary', // Default to secondary or outline, danger might be too strong for common placement
   size = 'md',
   text = 'Sign Out',
-  callbackUrl = '/auth/signin', // Default redirect location after sign-out
-  formClass = 'inline-block' // Default class for the form
+  callbackUrl = '/', // Default to homepage after sign-out
+  formClass = 'inline-block',
+  class: buttonClass, // For the <Button> component
 } = Astro.props;
 
-// Construct the action URL for the form, targeting the Auth.js sign-out endpoint.
 const formActionUrl = `/api/auth/signout?redirect=true&callbackUrl=${encodeURIComponent(callbackUrl)}`;
 ---
 
@@ -40,13 +33,9 @@ const formActionUrl = `/api/auth/signout?redirect=true&callbackUrl=${encodeURICo
   method="POST"
   action={formActionUrl}
   class:list={[formClass]}
+  data-testid="signout-form"
 >
-  {/*
-    The Button component below expects props that match its definition.
-    By making `variant` and `size` in this SignoutButton's Props more specific,
-    we ensure type compatibility with the child Button component.
-  */}
-  <Button type="submit" variant={variant} size={size}>
+  <Button type="submit" variant={variant} size={size} class={buttonClass}>
     {text}
   </Button>
 </form>

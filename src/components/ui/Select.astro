@@ -1,0 +1,123 @@
+---
+// src/components/ui/Select.astro
+export interface Option {
+  value: string | number;
+  label: string;
+  disabled?: boolean;
+}
+
+export interface OptGroup {
+  label: string;
+  options: Option[];
+}
+
+export type SelectOption = Option | OptGroup;
+
+export interface Props {
+  id?: string;
+  name?: string;
+  options: SelectOption[];
+  value?: string | number;
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
+  multiple?: boolean;
+  size?: number;
+  class?: string;
+  selectClass?: string;
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean | 'true' | 'false';
+  'data-testid'?: string;
+}
+
+const {
+  id,
+  name = id,
+  options = [],
+  value,
+  placeholder,
+  disabled = false,
+  required = false,
+  multiple = false,
+  size,
+  class: userWrapperClassName,
+  selectClass: userSelectClassName,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledby,
+  'aria-describedby': ariaDescribedby,
+  'aria-invalid': ariaInvalid,
+  'data-testid': dataTestId,
+} = Astro.props;
+
+const baseSelectClasses = 'input pr-10';
+const arrowEmoji = '▼'; 
+
+// Ensure consistent string values
+const currentSelectValue = value !== undefined && value !== null ? String(value) : undefined;
+
+// Check if placeholder should be selected
+const isPlaceholderSelected = currentSelectValue === undefined || currentSelectValue === '';
+---
+
+<div class:list={["relative", userWrapperClassName]}>
+  <select
+    id={id}
+    name={name}
+    class:list={[baseSelectClasses, userSelectClassName]}
+    disabled={disabled}
+    required={required}
+    multiple={multiple}
+    size={size}
+    value={currentSelectValue}
+    aria-label={ariaLabel}
+    aria-labelledby={ariaLabelledby}
+    aria-describedby={ariaDescribedby}
+    aria-invalid={ariaInvalid}
+    data-testid={dataTestId}
+  >
+    {placeholder && (
+      <option value="" disabled={required} selected={isPlaceholderSelected}>
+        {placeholder}
+      </option>
+    )}
+    {options.map((optOrGroup) => {
+      if ('options' in optOrGroup) {
+        return (
+          <optgroup label={optOrGroup.label}>
+            {optOrGroup.options.map((option) => {
+              const optionValueStr = String(option.value);
+              return (
+                <option 
+                  value={optionValueStr} 
+                  selected={optionValueStr === currentSelectValue} 
+                  disabled={option.disabled}
+                >
+                  {option.label}
+                </option>
+              );
+            })}
+          </optgroup>
+        );
+      } else {
+        const optionValueStr = String(optOrGroup.value);
+        return (
+          <option 
+            value={optionValueStr} 
+            selected={optionValueStr === currentSelectValue} 
+            disabled={optOrGroup.disabled}
+          >
+            {optOrGroup.label}
+          </option>
+        );
+      }
+    })}
+  </select>
+  <div 
+    class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-neutral-700 dark:text-neutral-300" 
+    aria-hidden="true"
+  >
+    <span class="text-xs">{arrowEmoji}</span>
+  </div>
+</div>

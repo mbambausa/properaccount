@@ -468,7 +468,7 @@ export function isScreenReaderAccessible(element: HTMLElement): boolean {
 /**
  * Class to add to elements that should be visible only to screen readers
  */
-export const srOnlyClass = `
+export const srOnlyCss = `
 .sr-only {
   position: absolute;
   width: 1px;
@@ -486,5 +486,5 @@ export const srOnlyClass = `
  * Generates HTML for sr-only CSS class inclusion
  */
 export function getSrOnlyStyle(): string {
-  return `<style>${srOnlyClass}</style>`;
+  return `<style>${srOnlyCss}</style>`;
 }

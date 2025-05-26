@@ -1,0 +1,42 @@
+---
+// src/components/ui/Spinner.astro
+export interface Props {
+  size?: 'sm' | 'md' | 'lg';
+  text?: string; // Optional text to display next to the spinner
+  class?: string; // Custom classes for the wrapper
+  textClass?: string; // Custom classes for the text
+  'data-testid'?: string;
+}
+
+const {
+  size = 'md',
+  text,
+  class: userClassName,
+  textClass = 'ml-2 text-sm text-neutral-600 dark:text-neutral-400',
+  'data-testid': dataTestId,
+} = Astro.props;
+
+const sizeClasses = {
+  sm: 'text-lg', // Emoji size
+  md: 'text-2xl',
+  lg: 'text-4xl',
+};
+
+const spinnerEmoji = '⏳'; // Or 🔄
+---
+
+<div 
+  class:list={["inline-flex items-center", userClassName]} 
+  role={text ? "status" : undefined} 
+  aria-live={text ? "polite" : undefined}
+  data-testid={dataTestId}
+>
+  <span class:list={[sizeClasses[size], "animate-spin"]} aria-hidden={text ? "true" : undefined}>
+    {spinnerEmoji}
+  </span>
+  {text && (
+    <span class:list={[textClass, {"sr-only": !text}]}>
+      {text || 'Loading...'}
+    </span>
+  )}
+</div>

@@ -13,6 +13,7 @@ export interface Props {
   fullWidth?: boolean;
   disabled?: boolean;
   loading?: boolean;
+  loadingText?: string;
   form?: string;
   id?: string;
   class?: string;
@@ -30,6 +31,7 @@ const {
   fullWidth = false,
   disabled = false,
   loading = false,
+  loadingText,
   form,
   id,
   class: userClassName = '',
@@ -38,8 +40,7 @@ const {
   rel,
 } = Astro.props as Props;
 
-const baseClasses = 'btn font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 inline-flex items-center justify-center transition-colors duration-150 ease-in-out';
-
+// Class logic
 const sizeClasses: Record<ButtonSize, string> = {
   xs: 'text-xs px-2.5 py-1.5 rounded-sm',
   sm: 'text-sm px-3 py-2 rounded',
@@ -53,35 +54,32 @@ const variantClasses: Record<ButtonVariant, string> = {
   secondary: 'btn-secondary',
   outline: 'border-2 border-primary-500 bg-transparent text-primary-600 hover:bg-primary-50 focus:ring-primary-500 dark:text-primary-400 dark:border-primary-400 dark:hover:bg-primary-900/30',
   text: 'bg-transparent text-primary-600 hover:bg-primary-50 hover:underline focus:ring-primary-500 dark:text-primary-400 dark:hover:bg-primary-900/20',
-  danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 focus:ring-offset-red-50 dark:bg-red-700 dark:hover:bg-red-800',
+  danger: 'bg-danger text-white hover:bg-danger/90 focus:ring-danger dark:bg-danger dark:hover:bg-danger/80',
 };
 
 const currentSizeClass = sizeClasses[size];
 const currentVariantClass = variantClasses[variant];
 
-// Initial combined classes, can be overridden by link-specific disabled state
 let combinedClasses = [
-  baseClasses,
+  'btn',
   currentSizeClass,
   currentVariantClass,
   fullWidth ? 'w-full' : '',
   loading ? 'opacity-75 cursor-not-allowed pointer-events-none' : '',
   (disabled && as === 'button') ? 'opacity-50 cursor-not-allowed' : '',
   userClassName,
-]
-  .filter(Boolean)
-  .join(' ');
+].filter(Boolean).join(' ');
 
-// Specific attributes for the link element
 let linkAriaDisabled: 'true' | undefined = undefined;
 let linkTabIndex: number | undefined = undefined;
 
-if (as === 'a' && disabled) {
-  combinedClasses = `${combinedClasses} opacity-50 cursor-not-allowed pointer-events-none`.trim();
+if (as === 'a' && (disabled || loading)) {
+  combinedClasses = `${combinedClasses} opacity-50 cursor-not-allowed pointer-events-none`.trim().split(' ').filter((v, i, a) => a.indexOf(v) === i).join(' ');
   linkAriaDisabled = 'true';
   linkTabIndex = -1;
 }
 
+const loadingEmoji = "⏳";
 ---
 
 {as === 'button' ? (
@@ -96,35 +94,29 @@ if (as === 'a' && disabled) {
     aria-busy={loading ? 'true' : undefined}
   >
     {loading && (
-      <span class="inline-flex items-center leading-none">
-        <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-hidden="true">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
+      <span class="inline-flex items-center leading-none mr-2" aria-hidden="true">
+        {loadingEmoji}
       </span>
     )}
-    <slot />
+    {loading && loadingText ? loadingText : <slot />}
   </button>
 ) : (
   <a
     id={id}
     class={combinedClasses}
     data-testid={dataTestId}
-    href={disabled ? undefined : href}
+    href={disabled || loading ? undefined : href}
     target={target}
     rel={rel}
-    aria-disabled={linkAriaDisabled}
-    tabindex={linkTabIndex}
+    aria-disabled={linkAriaDisabled || (loading ? 'true' : undefined)}
+    tabindex={linkTabIndex ?? (loading ? -1 : undefined)}
     role={href && href !== '#' ? undefined : "button"}
   >
-    {loading && ( // Loading indicator for links
-      <span class="inline-flex items-center leading-none">
-        <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-hidden="true">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
+    {loading && (
+      <span class="inline-flex items-center leading-none mr-2" aria-hidden="true">
+        {loadingEmoji}
       </span>
     )}
-    <slot />
+    {loading && loadingText ? loadingText : <slot />}
   </a>
 )}

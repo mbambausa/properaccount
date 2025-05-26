@@ -1,162 +1,244 @@
 // src/middleware.ts
-/**
- * ProperAccount Middleware (TypeScript)
- * Handles security headers, authentication state, CSRF protection, and request processing.
- */
-
 import type { APIContext, MiddlewareNext } from 'astro';
 import type { CloudflareEnv } from './env';
-import { getSessionFromRequest, extendSession, deleteSession } from './lib/auth/session';
 import { prepareCsrfToken, validateCsrfRequest } from './utils/csrf';
-import type { Session } from './types/auth';
+import type { Session as AuthJsSession, User as AuthJsUser } from '@auth/core/types';
+import type { Session, User } from './types/auth';
 
-// Explicitly define the types expected in locals to use the Session type
-interface AppLocals {
-  user?: any;
-  sessionId?: string;
-  session?: Session; // This ensures the Session type is used
-  csrfToken?: string;
-  cspNonce?: string;
-  runtime?: {
-    env: CloudflareEnv;
-  };
-}
+// Performance tracking for middleware
+const MIDDLEWARE_PERF_THRESHOLD = 5; // ms
 
+// Utility to generate a CSP nonce
 function generateSecureNonce(size = 16): string {
   const array = new Uint8Array(size);
   crypto.getRandomValues(array);
-  let base64 = btoa(String.fromCharCode.apply(null, Array.from(array)));
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  // More efficient base64 encoding
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
-export async function onRequest(
-  context: APIContext<AppLocals>, // Add type parameter to APIContext
-  next: MiddlewareNext
-): Promise<Response> {
-  const { request, locals, cookies } = context;
+// CSRF exempted paths
+const CSRF_EXEMPT_PATHS = new Set([
+  '/api/auth/',
+  '/api/webhook/',
+  '/api/health',
+  '/api/status'
+]);
+
+// Static asset paths
+const STATIC_ASSET_REGEX = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i;
+
+// Type adapter to convert Auth.js session to our custom session type
+function adaptAuthJsSession(authSession: AuthJsSession | null): Session | null {
+  if (!authSession?.user) return null;
+  
+  const now = Date.now();
+  const user = adaptAuthJsUser(authSession.user);
+  
+  // Create a session that matches our custom type
+  return {
+    id: crypto.randomUUID(), // Generate a unique session ID
+    userId: user.id,
+    expiresAt: authSession.expires ? new Date(authSession.expires).getTime() : now + (24 * 60 * 60 * 1000),
+    createdAt: now,
+  };
+}
+
+// Type adapter for Auth.js user to our custom user type
+function adaptAuthJsUser(authUser: AuthJsUser): User {
+  const now = Date.now();
+  
+  return {
+    id: authUser.id || authUser.email || crypto.randomUUID(),
+    email: authUser.email || '',
+    name: authUser.name || null,
+    // Remove image since it's not in your User type
+    role: 'user', // Default role, you might want to get this from session data
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+// Import the auth instance from your auth file
+async function getAuthSession(request: Request): Promise<AuthJsSession | null> {
+  try {
+    // This assumes you have a method to get the session
+    // You might need to adjust based on your auth setup
+    const authUrl = new URL('/api/auth/session', request.url);
+    const response = await fetch(authUrl, {
+      headers: request.headers,
+    });
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to get auth session:', error);
+    return null;
+  }
+}
+
+// Helper to get user from session
+async function getUserFromSession(session: Session | null, env: CloudflareEnv): Promise<User | null> {
+  if (!session) return null;
+  
+  // You would typically fetch the user from your database here
+  // For now, returning null - implement based on your user service
+  try {
+    // Example: const user = await userService.getById(session.userId);
+    // return user;
+    return null;
+  } catch (error) {
+    console.error('Failed to get user from session:', error);
+    return null;
+  }
+}
+
+export async function onRequest(context: APIContext, next: MiddlewareNext): Promise<Response> {
+  const startTime = performance.now();
+  
+  if (!context.locals) context.locals = {};
+  const { request, locals } = context;
   const env = locals.runtime?.env as CloudflareEnv | undefined;
   const isProd = import.meta.env.PROD;
+  const url = new URL(request.url);
+
+  // Skip middleware for static assets
+  if (STATIC_ASSET_REGEX.test(url.pathname)) {
+    return next();
+  }
 
   if (!env) {
-    console.error("Middleware FATAL: CloudflareEnv not found in context.locals.runtime.");
+    console.error("Middleware FATAL: CloudflareEnv not found.");
     return new Response("Server configuration error.", { status: 500 });
   }
 
+  // --- Auth.js Session Handling ---
+  try {
+    const authJsSession = await getAuthSession(request);
+    const session = adaptAuthJsSession(authJsSession);
+    locals.session = session;
+    
+    // Get user from session
+    const user = await getUserFromSession(session, env);
+    locals.user = user;
+  } catch (e) {
+    console.error("Error fetching session in middleware:", e);
+    locals.session = null;
+    locals.user = null;
+  }
+
+  // --- CSP NONCE ---
   const nonce = generateSecureNonce();
   locals.cspNonce = nonce;
 
+  // --- CSRF Protection ---
+  const isExemptPath = Array.from(CSRF_EXEMPT_PATHS).some(path => 
+    url.pathname.startsWith(path)
+  );
+
   try {
-    if (request.method === 'GET') {
+    if (request.method === 'GET' && !isExemptPath) {
       locals.csrfToken = await prepareCsrfToken(context);
-    } else if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
-      const url = new URL(request.url);
-      const isApiAuthEndpoint = url.pathname.startsWith('/api/auth/');
-      const isApiJsonRequest = request.headers.get('Content-Type')?.includes('application/json') && url.pathname.startsWith('/api/');
-      if (!isApiAuthEndpoint && !isApiJsonRequest) {
-        if (!await validateCsrfRequest(context)) {
-          console.warn(`CSRF validation failed for ${request.method} ${url.pathname}`);
-          return new Response('Invalid CSRF token.', { status: 403 });
-        }
+    } else if (
+      ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method) &&
+      !isExemptPath
+    ) {
+      const valid = await validateCsrfRequest(context);
+      if (!valid) {
+        return new Response(JSON.stringify({ error: 'Invalid CSRF token' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
   } catch (csrfError) {
-    console.error('CSRF middleware processing error:', csrfError);
-    return new Response('CSRF processing error.', { status: 500 });
+    console.error('CSRF middleware error:', csrfError);
+    return new Response(JSON.stringify({ error: 'CSRF processing error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
+  // --- Main Response ---
+  let response: Response;
   try {
-    const sessionInfo = await getSessionFromRequest(request, env);
-    if (sessionInfo) {
-      const { session: currentSession, user, sessionId } = sessionInfo;
-      const nowSeconds = Math.floor(Date.now() / 1000);
-
-      if (currentSession.expiresAt < nowSeconds) {
-        cookies.delete('session-token', { path: '/' });
-        locals.user = undefined;
-        locals.sessionId = undefined;
-        locals.session = undefined;
-        await deleteSession(env, sessionId);
-      } else {
-        locals.user = user;
-        locals.sessionId = sessionId;
-        locals.session = currentSession;
-
-        if (currentSession.createdAt) {
-          const sessionDuration = currentSession.expiresAt - currentSession.createdAt;
-          const sessionRemaining = currentSession.expiresAt - nowSeconds;
-          const twentyPercentDuration = sessionDuration * 0.2;
-
-          if (sessionRemaining < twentyPercentDuration && sessionRemaining > 0) {
-            try {
-              const extendedSessionData = await extendSession(env, sessionId);
-              if (extendedSessionData) {
-                locals.session = extendedSessionData;
-              }
-            } catch (extendError) {
-              console.error('Error extending session in middleware:', extendError);
-            }
-          }
-        }
-      }
-    } else {
-      locals.user = undefined;
-      locals.sessionId = undefined;
-      locals.session = undefined;
-      if (cookies.has('session-token')) {
-        cookies.delete('session-token', { path: '/' });
-      }
-    }
-  } catch (sessionError) {
-    console.error('Session processing error in middleware:', sessionError);
-    locals.user = undefined;
-    locals.sessionId = undefined;
-    locals.session = undefined;
+    response = await next();
+  } catch (error) {
+    console.error('Middleware error during next():', error);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
-  const responseFromNext = await next();
-  const finalResponse = responseFromNext;
-
-  finalResponse.headers.set('X-Content-Type-Options', 'nosniff');
-  finalResponse.headers.set('X-Frame-Options', 'DENY');
-  finalResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  finalResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()');
-
+  // --- Security Headers ---
+  const newHeaders = new Headers(response.headers);
+  
+  // Basic security headers
+  newHeaders.set('X-Content-Type-Options', 'nosniff');
+  newHeaders.set('X-Frame-Options', 'DENY');
+  newHeaders.set('X-XSS-Protection', '1; mode=block');
+  newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  newHeaders.set('Permissions-Policy', 
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()'
+  );
+  
+  // HSTS for production only
   if (isProd) {
-    finalResponse.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+    newHeaders.set('Strict-Transport-Security', 
+      'max-age=63072000; includeSubDomains; preload'
+    );
   }
 
-  const baseCspDirectives = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' https:`,
-    `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com`,
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: https:",
-    "connect-src 'self' https:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ];
+  // --- Content Security Policy (CSP) ---
+  const isHtml = response.headers.get('Content-Type')?.includes('text/html');
+  if (isHtml) {
+    const cspDirectives = [
+      "default-src 'self'",
+      `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net`,
+      `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com`,
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: https: blob:",
+      "connect-src 'self' https: wss:",
+      "media-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "worker-src 'self' blob:",
+      isProd ? "upgrade-insecure-requests" : ""
+    ].filter(Boolean);
+    
+    newHeaders.set('Content-Security-Policy', cspDirectives.join('; '));
+  }
 
-  const devRelaxations = [
-    `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:*`,
-    `connect-src 'self' http://localhost:* ws://localhost:* wss://localhost:* https:`,
-    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
-  ];
-
-  const cspString = isProd
-    ? baseCspDirectives.join('; ')
-    : [...baseCspDirectives.slice(0,1), ...devRelaxations, ...baseCspDirectives.slice(3)].join('; ');
-
-  finalResponse.headers.set('Content-Security-Policy', cspString);
-
-  if (request.method === 'GET' && finalResponse.headers.get('Content-Type')?.includes('text/html')) {
+  // --- Cache-Control ---
+  if (request.method === 'GET' && isHtml) {
     if (locals.user) {
-      finalResponse.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+      // Authenticated users get no cache
+      newHeaders.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+      newHeaders.set('Pragma', 'no-cache');
+      newHeaders.set('Expires', '0');
     } else {
-      finalResponse.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+      // Public pages get short cache
+      newHeaders.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
     }
   }
 
-  return finalResponse;
+  // --- Performance Monitoring ---
+  const duration = performance.now() - startTime;
+  if (duration > MIDDLEWARE_PERF_THRESHOLD) {
+    console.warn(`⚠️ Middleware took ${duration.toFixed(2)}ms for ${url.pathname}`);
+  }
+  newHeaders.set('Server-Timing', `middleware;dur=${duration.toFixed(2)}`);
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
 }

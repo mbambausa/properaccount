@@ -1,147 +1,22 @@
 ---
-// src/pages/index.astro
 import BaseLayout from '@/components/layout/BaseLayout.astro';
-import Button from '@/components/ui/Button.astro';
-import ErrorBoundary from '@/components/ui/ErrorBoundary.astro';
-
-const sessionToken = Astro.cookies.get('session-token')?.value;
-const isAuthenticated = !!sessionToken; 
 ---
 
-<BaseLayout title="ProperAccount - Real Estate Accounting Made Simple">
-  <ErrorBoundary>
-    <section class="relative text-white bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 dark:from-primary-700 dark:via-primary-800 dark:to-primary-900 overflow-hidden">
-      <div class="absolute inset-0">
-        {/* Decorative background elements - subtle pattern or abstract shapes */}
-      </div>
-      <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-        <div class="max-w-4xl mx-auto text-center">
-          <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight !leading-tight mb-6">
-            Real Estate Accounting, <span class="block sm:inline text-primary-300 dark:text-primary-400">Simplified.</span>
-          </h1>
-          <p class="text-lg sm:text-xl md:text-2xl mb-10 text-primary-100 dark:text-primary-200 max-w-3xl mx-auto">
-            Professional GAAP-compliant accounting software for real estate owners. Manage properties, track financials, and generate reports with effortless clarity.
-          </p>
-          <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
-            {isAuthenticated ? (
-              <Button href="/app/dashboard" variant="primary" size="lg" class="shadow-xl transform hover:scale-105">
-                Go to Dashboard
-              </Button>
-            ) : (
-              <Button href="/auth/register" variant="secondary" size="lg" class="!bg-white !text-primary-700 hover:!bg-neutral-100 shadow-xl transform hover:scale-105">
-                Start for Free
-              </Button>
-            )}
-            <Button href="#features" variant="outline" size="lg" class="!border-white !text-white hover:!bg-white/10 shadow-xl transform hover:scale-105">
-              Learn More
-            </Button>
-          </div>
-        </div>
-      </div>
-    </section>
-    
-    <div class="py-16 md:py-20">
-      <div class="container mx-auto px-6">
-        <div class="relative max-w-5xl mx-auto group">
-          <div class="absolute -inset-1.5 bg-gradient-to-r from-primary-400 to-secondary rounded-xl blur-lg opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-300 animate-tilt"></div>
-          <div class="relative bg-white dark:bg-neutral-800 shadow-2xl rounded-xl overflow-hidden p-1 md:p-2">
-            <img src="https://placehold.co/1200x700/f0f9ff/0284c7?text=ProperAccount+Dashboard" alt="ProperAccount Dashboard Preview" class="w-full h-auto rounded-lg" loading="lazy" />
-          </div>
-        </div>
+<BaseLayout title="Welcome">
+  <main class="min-h-screen flex items-center justify-center">
+    <div class="text-center">
+      <h1 class="text-4xl font-bold mb-4">Welcome to ProperAccount</h1>
+      <p class="text-lg text-neutral-600 dark:text-neutral-400 mb-8">
+        Professional Real Estate Accounting Made Simple
+      </p>
+      <div class="space-x-4">
+        <a href="/auth/login" class="btn-primary">
+          Login
+        </a>
+        <a href="/auth/register" class="btn-secondary">
+          Get Started
+        </a>
       </div>
     </div>
-    
-    <section id="features" class="py-16 md:py-20 bg-neutral-50 dark:bg-neutral-900/50">
-       <div class="container mx-auto px-6">
-        <div class="text-center mb-16">
-          <h2 class="text-3xl md:text-4xl font-bold text-neutral-900 dark:text-white mb-4">All Your Real Estate Finances in One Place</h2>
-          <p class="text-lg md:text-xl text-neutral-600 dark:text-neutral-300 max-w-3xl mx-auto">
-            ProperAccount offers a suite of powerful, intuitive tools designed specifically for the unique needs of property owners and managers.
-          </p>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {[
-            { title: "Multi-Entity Management", description: "Organize properties into separate entities with parent-subsidiary relationships. Perfect for complex portfolio structures.", icon: "i-carbon-building" },
-            { title: "Double-Entry Accounting", description: "GAAP-compliant double-entry bookkeeping ensures accurate financial records that satisfy accountants and tax professionals.", icon: "i-carbon-book" },
-            { title: "Comprehensive Reports", description: "Generate balance sheets, income statements, cash flow reports, and property performance metrics with a few clicks.", icon: "i-carbon-chart-line-data" },
-            { title: "Loan Management", description: "Track mortgages and loans with accurate amortization schedules and payment tracking for complete financial visibility.", icon: "i-carbon-currency-dollar" },
-            { title: "Document Storage", description: "Store and organize receipts, contracts, and important documents directly with your accounting records for easy reference.", icon: "i-carbon-folder-details-reference" },
-            { title: "Bank-Grade Security", description: "Enterprise-level encryption and security protocols ensure your financial data remains safe and protected at all times.", icon: "i-carbon-security" },
-          ].map(feature => (
-            <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-              <div class={`w-12 h-12 bg-primary-100 dark:bg-primary-700/30 rounded-lg text-primary-600 dark:text-primary-300 flex items-center justify-center mb-5 ${feature.icon}`} aria-hidden="true">
-              </div>
-              <h3 class="text-xl font-semibold text-neutral-900 dark:text-white mb-2">{feature.title}</h3>
-              <p class="text-neutral-600 dark:text-neutral-300 text-sm leading-relaxed">
-                {feature.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-    
-    {/* Testimonials Section - Structure only */}
-    <section class="py-16 md:py-20">
-      <div class="container mx-auto px-6">
-        <div class="text-center mb-16">
-          <h2 class="text-3xl md:text-4xl font-bold text-neutral-900 dark:text-white mb-4">Trusted by Property Owners</h2>
-        </div>
-        {/* ... Testimonial items ... */}
-      </div>
-    </section>
-    
-    <section class="bg-gradient-to-r from-primary-600 to-primary-700 dark:from-primary-700 dark:to-primary-800 text-white py-20">
-      <div class="container mx-auto px-6 text-center">
-        <h2 class="text-3xl md:text-4xl font-bold mb-6">Ready to Simplify Your Real Estate Accounting?</h2>
-        <p class="text-lg md:text-xl text-primary-100 dark:text-primary-200 mb-8 max-w-3xl mx-auto">
-          Take control of your property finances. Get started with ProperAccount today—it's free!
-        </p>
-        <div class="flex flex-col sm:flex-row justify-center gap-4">
-          <Button href="/auth/register" variant="secondary" size="xl" class="!bg-white !text-primary-700 hover:!bg-neutral-100 shadow-xl transform hover:scale-105">
-            Sign Up Free
-          </Button>
-        </div>
-      </div>
-    </section>
-  </ErrorBoundary>
+  </main>
 </BaseLayout>
-
-<style is:global>
-  @keyframes tilt {
-    0%, 100% { transform: rotate(0deg) scale(1); }
-    50% { transform: rotate(0.5deg) scale(1.01); }
-  }
-  .animate-tilt {
-    animation: tilt 15s infinite linear alternate;
-  }
-</style>
-
-<script>
-  // Smooth scroll for anchor links
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function(e) {
-        e.preventDefault();
-        
-        // Use explicit variable instead of 'this'
-        const anchorElement = e.currentTarget as HTMLAnchorElement;
-        const href = anchorElement.getAttribute('href');
-        
-        if (href) {
-          const targetEl = document.querySelector(href);
-          if (targetEl) {
-            targetEl.scrollIntoView({
-              behavior: 'smooth',
-              block: 'start'
-            });
-            
-            // Update URL hash without scrolling
-            history.pushState({}, '', href);
-          }
-        }
-      });
-    });
-  });
-</script>

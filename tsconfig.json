@@ -3,34 +3,30 @@
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "module": "ESNext",
-    "moduleResolution": "bundler", // Recommended for Vite/Astro
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "isolatedModules": true, // Good for modern bundlers
-    "esModuleInterop": true, // Improves interop with CJS modules
-    "verbatimModuleSyntax": true, // Recommended since TS 5.0 for clearer import/export behavior
-    "noEmit": true, // Astro handles emitting files
-    // All strictness flags are inherited from "astro/tsconfigs/strict"
-    // but explicitly listing key ones can be a reminder or override if needed.
-    // "strict": true, // Already true via extends
-    // "noImplicitAny": true, // Already true via extends
-    // "strictNullChecks": true, // Already true via extends
-    // "strictFunctionTypes": true, // Already true via extends
-    // "strictBindCallApply": true, // Already true via extends
-    // "strictPropertyInitialization": true, // Already true via extends
-    // "noImplicitThis": true, // Already true via extends
-    "useUnknownInCatchVariables": true, // Safer than 'any' for catch variables
-    "alwaysStrict": true, // Ensures 'use strict'
-    "noUnusedLocals": true, // Helps keep code clean
-    "noUnusedParameters": true, // Helps keep code clean
-    "noImplicitReturns": true, // Ensures functions return values consistently
-    "noFallthroughCasesInSwitch": true, // Prevents accidental fallthrough bugs
-    "forceConsistentCasingInFileNames": true, // Good for cross-platform dev
-    "skipLibCheck": true, // Speeds up compilation
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "useDefineForClassFields": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true,
     "types": [
-      "@cloudflare/workers-types", // Essential for CF Workers env
-      "astro/client" // Ensures Astro's client types are available
+      "@cloudflare/workers-types",
+      "@types/alpinejs",
+      "astro/client"
     ],
     "baseUrl": ".",
     "paths": {
@@ -42,26 +38,29 @@
       "@styles/*": ["src/styles/*"],
       "@types/*": ["src/types/*"],
       "@content/*": ["src/content/*"],
-      // "@server/*": ["src/server/*"], // This alias seems unused in the current structure. Remove if not needed.
       "@db/*": ["cloudflare/d1/*"]
     },
     "jsx": "preserve",
-    "jsxImportSource": "astro" // Correct for Astro's JSX handling
-    // "typeRoots" is often not needed if @types are in node_modules and custom types in src/ are picked up by include.
-    // Default behavior usually covers these. If you have specific reasons, keep it.
-    // "typeRoots": [
-    //   "./node_modules/@types",
-    //   "./src"
-    // ]
+    "jsxImportSource": "astro"
   },
   "include": [
     "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.astro",
     "tests/**/*.ts",
-    "cloudflare/**/*.ts", // Include .ts files in cloudflare directory (e.g., d1/schema.ts)
+    "cloudflare/**/*.ts",
+    "scripts/**/*.js",
     "*.config.ts",
-    "*.config.mjs"
+    "*.config.mjs",
+    "*.config.js"
   ],
-  "exclude": ["node_modules", ".astro", "dist", ".wrangler", ".mf", ".DS_Store"] // Added .astro build cache
+  "exclude": [
+    "node_modules",
+    ".astro",
+    "dist",
+    ".wrangler",
+    ".mf",
+    ".DS_Store",
+    "public/mojo/**/*.wasm"
+  ]
 }

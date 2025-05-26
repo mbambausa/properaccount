@@ -1,0 +1,26 @@
+{
+  "title": "Simple Rental Property Chart of Accounts",
+  "description": "Simplified chart of accounts for single rental properties",
+  "accounts": [
+    { "code": "1000", "name": "Cash", "type": "asset", "subtype": "current" },
+    { "code": "1100", "name": "Rent Receivable", "type": "asset", "subtype": "current" },
+    { "code": "1500", "name": "Property", "type": "asset", "subtype": "fixed" },
+    { "code": "1510", "name": "Accumulated Depreciation", "type": "asset", "subtype": "contra" },
+    
+    { "code": "2000", "name": "Accounts Payable", "type": "liability", "subtype": "current" },
+    { "code": "2100", "name": "Security Deposits", "type": "liability", "subtype": "current" },
+    { "code": "2500", "name": "Mortgage", "type": "liability", "subtype": "long-term" },
+    
+    { "code": "3000", "name": "Owner's Equity", "type": "equity", "subtype": "capital" },
+    
+    { "code": "4000", "name": "Rental Income", "type": "income", "subtype": "operating" },
+    
+    { "code": "5000", "name": "Management Fees", "type": "expense", "subtype": "operating" },
+    { "code": "5100", "name": "Maintenance", "type": "expense", "subtype": "operating" },
+    { "code": "5200", "name": "Property Tax", "type": "expense", "subtype": "operating" },
+    { "code": "5300", "name": "Insurance", "type": "expense", "subtype": "operating" },
+    { "code": "5400", "name": "Utilities", "type": "expense", "subtype": "operating" },
+    { "code": "5500", "name": "Depreciation", "type": "expense", "subtype": "non-cash" },
+    { "code": "5600", "name": "Mortgage Interest", "type": "expense", "subtype": "financing" }
+  ]
+}

@@ -1,0 +1,160 @@
+---
+// src/components/ui/Toast.astro
+/**
+ * No props; only JS/HTML output for Toast UI system.
+ */
+---
+<div id="toast-container" aria-live="polite" aria-atomic="true" class="fixed z-50 top-4 right-4 flex flex-col items-end"></div>
+
+<script is:inline> // Ensure script is treated as plain JS by Astro
+  (function () { // IIFE to keep scope clean
+    class ToastSystem {
+      /** @type {HTMLElement | null} */
+      container;
+      /** @type {Map<string, number>} */
+      timeouts;
+
+      constructor() {
+        this.container = document.getElementById('toast-container');
+        this.timeouts = new Map();
+
+        if (!this.container) {
+          console.error('Toast container not found');
+          return;
+        }
+
+        /** @param {CustomEvent<import('../../env.d.ts').ToastDetail>} event */
+        window.addEventListener('toast', (event) => {
+          if (!event.detail) return;
+          const { type, message, duration } = event.detail;
+          this.show(type, message, duration);
+        });
+      }
+
+      /**
+       * @param {'success' | 'error' | 'warning' | 'info'} type
+       * @param {string} message
+       * @param {number} [duration=5000]
+       * @returns {string | undefined} Toast ID or undefined if container not found
+       */
+      show(type, message, duration = 5000) {
+        if (!this.container) return undefined;
+        const id = 'toast-' + Date.now() + Math.random().toString(36).substring(2, 7);
+        const toast = this.createToastElement(id, type, message);
+
+        toast.classList.add('opacity-0', 'transform', 'translate-x-full');
+        this.container.appendChild(toast);
+        void toast.offsetWidth;
+        toast.classList.remove('opacity-0', 'translate-x-full');
+        toast.classList.add('opacity-100', 'translate-x-0');
+
+        if (duration > 0) {
+          const timeoutId = window.setTimeout(() => this.remove(id), duration);
+          this.timeouts.set(id, timeoutId);
+        }
+        return id;
+      }
+
+      /** @param {string} id */
+      remove(id) {
+        if (!this.container) return;
+        const toast = document.getElementById(id);
+        if (toast) {
+          toast.classList.remove('opacity-100', 'translate-x-0');
+          toast.classList.add('opacity-0', 'transform', 'translate-x-full');
+          setTimeout(() => {
+            toast.remove();
+            if (this.timeouts.has(id)) {
+              window.clearTimeout(this.timeouts.get(id));
+              this.timeouts.delete(id);
+            }
+          }, 300);
+        }
+      }
+
+      /**
+       * @param {string} id
+       * @param {'success' | 'error' | 'warning' | 'info'} type
+       * @param {string} message
+       * @returns {HTMLDivElement}
+       */
+      createToastElement(id, type, message) {
+        const toast = document.createElement('div');
+        toast.id = id;
+        toast.className = 'rounded-md p-4 mb-2 flex items-start shadow-lg transition-all duration-300 ease-in-out w-full border-l-4 max-w-sm sm:max-w-md';
+
+        const anouncementRole = (type === 'error' || type === 'warning') ? 'alert' : 'status';
+        toast.setAttribute('role', anouncementRole);
+        toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+
+        const typeDetails = {
+          success: { containerClasses: 'bg-success/10 dark:bg-success/20 border-success', emoji: '✅', emojiClasses: 'text-success' },
+          error: { containerClasses: 'bg-danger/10 dark:bg-danger/20 border-danger', emoji: '❌', emojiClasses: 'text-danger' },
+          warning: { containerClasses: 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-500', emoji: '⚠️', emojiClasses: 'text-yellow-600 dark:text-yellow-400' },
+          info: { containerClasses: 'bg-primary-50 dark:bg-primary-900/30 border-primary-500', emoji: 'ℹ️', emojiClasses: 'text-primary-600 dark:text-primary-400' }
+        };
+
+        const currentType = typeDetails[type] || typeDetails.info;
+        toast.classList.add(...currentType.containerClasses.split(' '));
+
+        const emojiElement = document.createElement('div');
+        emojiElement.className = `flex-shrink-0 mr-3 text-xl leading-none ${currentType.emojiClasses}`;
+        emojiElement.setAttribute('aria-hidden', 'true');
+        emojiElement.textContent = currentType.emoji;
+
+        const messageWrapper = document.createElement('div');
+        messageWrapper.className = 'flex-1 pt-0.5';
+        const messageText = document.createElement('p');
+        messageText.className = 'text-sm font-medium text-neutral-900 dark:text-neutral-100';
+        messageText.textContent = message;
+        messageWrapper.appendChild(messageText);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'ml-auto -mx-1 -my-1 flex-shrink-0 inline-flex text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-md p-1 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-150';
+        closeBtn.setAttribute('aria-label', 'Close notification');
+        const closeEmojiSpan = document.createElement('span');
+        closeEmojiSpan.setAttribute('aria-hidden', 'true');
+        closeEmojiSpan.textContent = '✕';
+        closeBtn.appendChild(closeEmojiSpan);
+        closeBtn.addEventListener('click', () => this.remove(id));
+
+        toast.appendChild(emojiElement);
+        toast.appendChild(messageWrapper);
+        toast.appendChild(closeBtn);
+
+        return toast;
+      }
+    }
+
+    if (typeof window.toastSystem === 'undefined') {
+      document.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.toastSystem === 'undefined') {
+          window.toastSystem = new ToastSystem();
+        }
+      });
+    }
+
+    if (typeof window.showToast !== 'function') {
+      /**
+       * @param {'success' | 'error' | 'warning' | 'info'} type
+       * @param {string} message
+       * @param {number} [duration]
+       * @returns {string | null | undefined}
+       */
+      window.showToast = function (type, message, duration) {
+        if (window.toastSystem && typeof window.toastSystem.show === 'function') {
+          return window.toastSystem.show(type, message, duration);
+        } else {
+          console.warn('Toast system not initialized when showToast was called. Toast might be queued.');
+          document.addEventListener('DOMContentLoaded', () => {
+            if (window.toastSystem && typeof window.toastSystem.show === 'function') {
+              window.toastSystem.show(type, message, duration);
+            }
+          }, { once: true });
+          return null;
+        }
+      };
+    }
+  })();
+</script>

@@ -1,0 +1,103 @@
+---
+// src/components/auth/LoginForm.astro
+import Button from '@components/ui/Button.astro';
+import Alert from '@components/ui/Alert.astro';
+
+interface Props {
+  error?: string;
+  callbackUrl?: string;
+  emailValue?: string; 
+}
+
+const {
+  error,
+  callbackUrl = '/app/dashboard',
+  emailValue = '',
+} = Astro.props as Props;
+
+const formActionUrl = `/api/auth/callback/credentials-login?redirect=true&callbackUrl=${encodeURIComponent(callbackUrl)}`;
+---
+
+<form 
+  method="POST" 
+  action={formActionUrl}
+  class="space-y-6"
+  data-testid="login-form"
+>
+  {error && (
+    <Alert type="error" dismissible class="mb-4" id="form-error-alert">
+      {error === "CredentialsSignin"
+        ? "Incorrect email or password. Please try again."
+        : error === "OAuthAccountNotLinked"
+        ? "This email is already linked with another provider. Try signing in with that provider."
+        : error === "EmailNotVerified"
+        ? "Please verify your email before logging in. Check your inbox for a verification link."
+        : "An unexpected error occurred. Please try again."}
+    </Alert>
+  )}
+
+  <div>
+    <label for="email-login-form" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+      Email Address
+    </label>
+    <input
+      id="email-login-form"
+      name="email"
+      type="email"
+      autocomplete="email"
+      required
+      placeholder="you@example.com"
+      class="input w-full"
+      aria-describedby={error ? "form-error-alert email-error-login" : "email-error-login"}
+      aria-invalid={!!error}
+      value={emailValue}
+    />
+  </div>
+
+  <div>
+    <label for="password-login-form" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+      Password
+    </label>
+    <input
+      id="password-login-form"
+      name="password"
+      type="password"
+      autocomplete="current-password"
+      required
+      placeholder="••••••••"
+      class="input w-full"
+      aria-describedby={error ? "form-error-alert password-error-login" : "password-error-login"}
+      aria-invalid={!!error}
+    />
+  </div>
+
+  <div class="flex items-center justify-between text-sm pt-1">
+    <div></div>
+    <div>
+      <a
+        href="/auth/forgot-password"
+        class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300 hover:underline"
+      >
+        Forgot your password?
+      </a>
+    </div>
+  </div>
+
+  <div class="pt-2">
+    <Button type="submit" variant="primary" fullWidth size="lg">
+      Sign In
+    </Button>
+  </div>
+
+  <div class="mt-6 text-center">
+    <p class="text-sm text-neutral-600 dark:text-neutral-400">
+      Don't have an account?
+      <a 
+        href={`/auth/register${callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : ''}`} 
+        class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300 hover:underline"
+      >
+        Sign up
+      </a>
+    </p>
+  </div>
+</form>

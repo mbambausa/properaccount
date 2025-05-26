@@ -1,43 +1,134 @@
-# .github/workflows/test.yml
-name: Run Tests and Linters
+name: CI - Test & Lint
 
 on:
   push:
-    branches:
-      - main # Run on pushes to main
-      - '*'   # Run on pushes to any other branch
+    branches-ignore: [main]
   pull_request:
-    branches:
-      - main # Also run on PRs targeting main (can be redundant if deploy-preview covers this, but good for explicitness)
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test-and-lint:
-    name: Test & Lint
+  lint:
+    name: Lint Code
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 22 # Consistent with your project
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
-      - name: Run linters
+      - name: Run linters (ESLint)
         run: npm run lint
 
-      - name: Run tests
-        run: npm test
+      - name: Check formatting (Prettier)
+        run: npm run format:check # Assuming 'format:check' script uses 'prettier --check'
 
-      # Optional: Upload Playwright report if tests fail or always
-      - name: Upload Playwright report
-        if: always() # Or use `if: failure()` to only upload on test failure
-        uses: actions/upload-artifact@v4
+      - name: Run Astro check
+        run: npm run astro check # This command is 'astro check', not 'npm run astro check' unless aliased
+
+  type-check:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7 # Keep reports for 7 days
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run TypeScript compiler
+        run: npm run type-check
+
+  test:
+    name: Run Tests (Playwright)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Cache Playwright and npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright 
+            node_modules
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium # Specify browsers if not all, or remove chromium for all
+
+      - name: Build application (if tests need it)
+        run: npm run build
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Upload test results on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-test-results
+          path: test-results/ # Ensure this is Playwright's configured output for reports/traces
+          retention-days: 7
+
+  bundle-size:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build and analyze
+        run: |
+          npm run build
+          echo "### 📊 Bundle Size Report (dist directory)" >> $GITHUB_STEP_SUMMARY
+          echo "| File Path        | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------------|------|" >> $GITHUB_STEP_SUMMARY
+          # List top 20 largest files in dist to keep summary concise
+          find dist -type f -printf '%s\t%p\n' | sort -nr | head -n 20 | while IFS=$'\t' read -r size path; do
+            human_size=$(numfmt --to=iec-i --suffix=B --format="%.1f" $size)
+            echo "| ${path#dist/} | $human_size |" >> $GITHUB_STEP_SUMMARY
+          done
+          TOTAL_SIZE=$(du -sh dist | cut -f1)
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total dist Size: $TOTAL_SIZE**" >> $GITHUB_STEP_SUMMARY

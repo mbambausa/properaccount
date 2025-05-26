@@ -5,8 +5,8 @@
  * This file contains utility functions for working with Cloudflare D1 databases.
  * It provides a simplified interface for common operations and transaction handling.
  */
-import type { CloudflareEnv } from '@/env';
-import type { D1Database, D1Result } from '@cloudflare/workers-types';
+import type { CloudflareEnv } from '../../env';
+import type { D1Database } from '@cloudflare/workers-types';
 
 /**
  * Sanitizes a SQL identifier (table or column name) to prevent SQL injection.
@@ -25,8 +25,7 @@ function sanitizeIdentifier(name: string): string {
 /**
  * Execute database operations within a transaction.
  * All operations either succeed together or fail together.
- * 
- * @param db - The D1 database instance
+ * * @param db - The D1 database instance
  * @param callback - Function containing DB operations to execute in the transaction
  * @returns The result of the callback function
  */
@@ -51,8 +50,7 @@ export async function executeTransaction<T>(
 
 /**
  * Retrieves a single record by ID.
- * 
- * @param db - The D1 database instance
+ * * @param db - The D1 database instance
  * @param table - The table name
  * @param id - The ID value
  * @param idField - The ID column name (default: 'id')
@@ -72,8 +70,7 @@ export async function getById<T = Record<string, unknown>>(
 
 /**
  * Inserts a new record into the database.
- * 
- * @param db - The D1 database instance
+ * * @param db - The D1 database instance
  * @param table - The table name
  * @param data - The data to insert
  * @returns Object with the inserted ID and success status
@@ -108,8 +105,7 @@ export async function insert(
 
 /**
  * Updates an existing record in the database.
- * 
- * @param db - The D1 database instance
+ * * @param db - The D1 database instance
  * @param table - The table name
  * @param id - The ID of the record to update
  * @param data - The data to update
@@ -145,8 +141,7 @@ export async function update(
 
 /**
  * Deletes a record by ID.
- * 
- * @param db - The D1 database instance
+ * * @param db - The D1 database instance
  * @param table - The table name
  * @param id - The ID of the record to delete
  * @param idField - The ID column name (default: 'id')
@@ -172,8 +167,7 @@ export async function deleteById(
 
 /**
  * Retrieves multiple records with filtering and pagination.
- * 
- * @param db - The D1 database instance
+ * * @param db - The D1 database instance
  * @param table - The table name
  * @param options - Query options (where, params, orderBy, limit, offset)
  * @returns Object with data, total count, and hasMore flag
@@ -220,8 +214,7 @@ export async function getMany<T = Record<string, unknown>>(
 
 /**
  * Checks if records matching a condition exist.
- * 
- * @param db - The D1 database instance
+ * * @param db - The D1 database instance
  * @param table - The table name
  * @param where - The WHERE clause
  * @param params - Query parameters
@@ -243,8 +236,7 @@ export async function exists(
 /**
  * Gets a D1 database instance for a specific entity.
  * Implements the database-per-tenant model from the project plan.
- * 
- * @param env - The Cloudflare environment
+ * * @param env - The Cloudflare environment
  * @param entityId - The entity ID
  * @returns The D1 database instance for the entity
  */
@@ -270,8 +262,7 @@ export async function getEntityDatabase(
 /**
  * Creates a new D1 database for an entity.
  * Note: This is a placeholder - actual implementation requires Cloudflare API.
- * 
- * @param env - The Cloudflare environment
+ * * @param env - The Cloudflare environment
  * @param entityId - The entity ID
  */
 export async function createEntityDatabase(

@@ -1,0 +1,19 @@
+{
+  "namespaces": [
+    {
+      "binding": "CONFIG_KV",
+      "id": "ProperAccount",
+      "description": "Application configuration and feature flags"
+    },
+    {
+      "binding": "REPORT_CACHE_KV",
+      "id": "ProperAccount REPORT_CACHE_KV",
+      "description": "Cached financial reports"
+    },
+    {
+      "binding": "SESSION_KV",
+      "id": "ProperAccount SESSION",
+      "description": "User session storage"
+    }
+  ]
+}

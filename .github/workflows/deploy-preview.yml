@@ -1,39 +1,151 @@
-# .github/workflows/deploy-preview.yml
-name: Deploy Preview
+name: Deploy Preview to Cloudflare Pages
 
 on:
   pull_request:
-    branches: [ main ] # Triggers on PRs targeting the main branch
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.vscode/**'
+
+concurrency:
+  group: preview-${{ github.head_ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    name: Build and Deploy Preview
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v3
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          node-version: 22 # Using Node.js v22, consistent with your package.json
-          cache: 'npm'
-      - run: npm ci # Clean install, good for CI
-      - run: npm run lint
-      - run: npm test # Runs Playwright tests as defined in package.json
+          fetch-depth: 0
 
-  deploy-preview:
-    needs: test # Ensures tests pass before deploying a preview
-    runs-on: ubuntu-latest
-    name: Deploy to Preview
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: '.nvmrc'
           cache: 'npm'
-      - run: npm ci
-      - run: npm run build
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .astro
+            .wrangler
+          key: ${{ runner.os }}-deps-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      # Mojo build steps commented out until Mojo is properly set up
+      # - name: Setup Python for Mojo
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.11'
+      #     cache: 'pip'
+
+      # - name: Cache Mojo/WASM builds
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       src/mojo/**/*.wasm
+      #       src/mojo/**/*.wasm.map
+      #     key: ${{ runner.os }}-mojo-${{ hashFiles('src/mojo/**/*.mojo') }}
+
+      # - name: Build Mojo to WASM
+      #   run: npm run mojo:build
+      #   env:
+      #     NODE_ENV: production
+
+      - name: Run type checking
+        run: npm run type-check
+
+      - name: Build Astro
+        run: npm run build
+        env:
+          NODE_ENV: production
+          # Ensure this accurately reflects your preview URL structure with Cloudflare Pages
+          PUBLIC_APP_URL: https://${{ github.head_ref }}.properaccount.pages.dev # Adjusted for typical branch previews
+
+      - name: Check build size
+        id: build_size_check
+        run: |
+          echo "Checking build size to ensure it fits within Cloudflare Pages limits..."
+          DIST_SIZE_BYTES=$(du -sb dist | cut -f1)
+          DIST_SIZE_HUMAN=$(du -sh dist | cut -f1)
+          echo "DIST_SIZE_BYTES=$DIST_SIZE_BYTES" >> $GITHUB_OUTPUT
+          echo "DIST_SIZE_HUMAN=$DIST_SIZE_HUMAN" >> $GITHUB_OUTPUT
+          echo "Build size: $DIST_SIZE_HUMAN ($DIST_SIZE_BYTES bytes)"
+          # Cloudflare Pages _worker.js limit is 1MB, total assets much larger (e.g. 25MB for static files, 20k files)
+          # This checks if the 'dist' directory (often containing the worker and static assets) is too large.
+          # Adjust limit as needed based on specific Cloudflare constraints you're hitting (e.g., worker size vs total assets)
+          # Assuming a general generous limit for overall static assets for now.
+          # If a specific _worker.js size is the concern, the check should target that file.
+          # For example, a 25MB overall limit: 25 * 1024 * 1024 = 26214400 bytes
+          if [ $DIST_SIZE_BYTES -gt 26214400 ]; then # 25MB
+            echo "Build size ($DIST_SIZE_HUMAN) exceeds 25MB limit!"
+            exit 1
+          fi
+
       - name: Deploy to Cloudflare Pages
+        id: cloudflare_pages_deploy
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: 'properaccount'
+          directory: ./dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          # wranglerVersion: '3' # pages-action manages its wrangler version
+
+      - name: Run D1 Migrations (Preview)
+        if: success()
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy ./dist --project-name=properaccount --branch=${{ github.head_ref }} # Deploys PR branch to CF Pages
-          wranglerVersion: '4.16.0' # Updated to match your local wrangler version
+          command: d1 migrations apply DATABASE --preview # Using binding name 'DATABASE'
+          # For preview migrations, Wrangler uses the `preview_database_id` associated with the
+          # 'DATABASE' binding in your production environment in wrangler.toml
+          # No explicit 'environment' input needed here if using the --preview flag with the production binding.
+          wranglerVersion: '3'
+
+      - name: Add deployment comment
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request' && success()
+        with:
+          script: |
+            const url = '${{ steps.cloudflare_pages_deploy.outputs.url }}';
+            const environment = '${{ steps.cloudflare_pages_deploy.outputs.environment }}';
+            const distSize = '${{ steps.build_size_check.outputs.DIST_SIZE_HUMAN }}';
+            
+            const comment = `### 🚀 Preview Deployment Ready!
+            
+            | Property | Value |
+            |----------|-------|
+            | **Preview URL** | ${url} |
+            | **Environment** | \`${environment}\` |
+            | **Build Size** | \`${distSize}\` |
+            | **Commit** | \`${context.sha.substring(0, 7)}\` |
+            
+            #### 🔍 Deployment Checks
+            - ✅ Type checking passed
+            - ✅ Build completed successfully
+            - ✅ Size within limits
+            - ✅ D1 migrations applied (Preview DB)
+            
+            ---
+            *Preview deployments use separate resources from production.*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

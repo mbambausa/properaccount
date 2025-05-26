@@ -1,161 +1,139 @@
 ---
 // src/components/layout/Sidebar.astro
-
 import type { User } from '@/types/auth';
 
 export interface Props {
   user?: User;
   currentPath: string;
-  isCollapsed?: boolean; // Prop to control collapsed state, if managed from parent
+  isCollapsedInitial?: boolean; 
 }
 
-const { user, currentPath, isCollapsed = false } = Astro.props;
+const { user, currentPath, isCollapsedInitial = false } = Astro.props;
+
+const logoEmoji = '💼';
 
 const navigationItems = [
-  { name: 'Dashboard', href: '/app/dashboard', icon: 'i-carbon-dashboard', id: 'nav-dashboard' },
-  { name: 'Entities', href: '/app/entities', icon: 'i-carbon-building', id: 'nav-entities' },
-  { name: 'Accounts', href: '/app/accounts', icon: 'i-carbon-folder', id: 'nav-accounts' },
-  { name: 'Transactions', href: '/app/transactions', icon: 'i-carbon-money', id: 'nav-transactions' },
-  { name: 'Reports', href: '/app/reports', icon: 'i-carbon-chart-line', id: 'nav-reports' },
+  { name: 'Dashboard', href: '/app/dashboard', emoji: '📊', id: 'nav-dashboard' },
+  { name: 'Entities', href: '/app/entities', emoji: '🏢', id: 'nav-entities' },
+  { name: 'Accounts', href: '/app/accounts', emoji: '📂', id: 'nav-accounts' },
+  { name: 'Transactions', href: '/app/transactions', emoji: '💳', id: 'nav-transactions' },
+  { name: 'Reports', href: '/app/reports', emoji: '📈', id: 'nav-reports' },
 ];
 
 const settingsItems = [
-  { name: 'Settings', href: '/app/settings', icon: 'i-carbon-settings', id: 'nav-settings' },
-  { name: 'Help', href: '/app/help', icon: 'i-carbon-help', id: 'nav-help' },
+  { name: 'Settings', href: '/app/settings', emoji: '⚙️', id: 'nav-settings' },
+  { name: 'Help', href: '/app/help', emoji: '❓', id: 'nav-help' },
 ];
 
 const adminItems = user?.role === 'admin' ? [
-  { name: 'Admin', href: '/app/admin', icon: 'i-carbon-user-admin', id: 'nav-admin' }
+  { name: 'Admin', href: '/app/admin', emoji: '👑', id: 'nav-admin' }
 ] : [];
 
-function isActive(itemPath: string, currentItemPath: string) {
-  if (itemPath === '/app/dashboard') {
-    return currentItemPath === itemPath;
+function isActive(itemPath: string): boolean {
+  if (itemPath === '/app/dashboard' && currentPath === '/app/dashboard') {
+    return true;
   }
-  return currentItemPath.startsWith(itemPath);
+  if (itemPath !== '/app/dashboard' && currentPath.startsWith(itemPath) && 
+      (currentPath.length === itemPath.length || currentPath.charAt(itemPath.length) === '/')) {
+    return true;
+  }
+  return false;
 }
 
-// Alpine.js data for sidebar state
-// Note: Using single quotes for the outer x-data string, and double quotes inside the JS object.
-// CSS variables are strings.
-const alpineData = JSON.stringify({
-  open: false, // For mobile view
-  isCollapsed: isCollapsed,
-  sidebarWidth: 'var(--sidebar-width)', // Make sure these CSS vars are defined in global.css
-  sidebarCollapsedWidth: 'var(--sidebar-collapsed-width)',
-  
-  // Method to toggle collapse state
-  toggleCollapse() {
-    this.isCollapsed = !this.isCollapsed;
-    // Update a CSS variable on the root for other components (like AppLayout) to react to.
-    document.documentElement.style.setProperty(
-      '--current-sidebar-width', 
-      this.isCollapsed ? this.sidebarCollapsedWidth : this.sidebarWidth
-    );
-    // Optionally, dispatch an event for other components or save preference
-    // window.dispatchEvent(new CustomEvent('sidebar-toggled', { detail: { collapsed: this.isCollapsed }}));
-  },
+const SIDEBAR_WIDTH_VAR_NAME = '--sidebar-width';
+const SIDEBAR_COLLAPSED_WIDTH_VAR_NAME = '--sidebar-collapsed-width';
 
-  // Computed property for the current width based on collapsed state
-  get appliedWidth() {
-    return this.isCollapsed ? this.sidebarCollapsedWidth : this.sidebarWidth;
-  },
-
-  // Mobile menu visibility logic
-  get showMobileMenu() {
-    return this.open && window.innerWidth < 1024;
-  },
-  get showDesktopSidebar() {
-    // On desktop, sidebar is driven by isCollapsed, not 'open' for translate.
-    // 'open' could still be used for an initial animation if desired.
-    return window.innerWidth >= 1024;
-  }
-}).replace(/"/g, "'"); // Replace outer double quotes with single if needed for attribute
-
-// Corrected x-init logic for better readability and correctness
-const xInitLogic = `
-  $watch('isCollapsed', value => {
-    document.documentElement.style.setProperty('--current-sidebar-width', value ? sidebarCollapsedWidth : sidebarWidth);
-  });
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 1024) { // Desktop
-      open = false; // Ensure mobile overlay logic is reset
-      // isCollapsed state persists for desktop
-    } else { // Mobile
-      open = false; // Close sidebar if window is resized to mobile while it was open
-    }
-  });
-  // Set initial CSS variable based on prop
-  document.documentElement.style.setProperty('--current-sidebar-width', ${isCollapsed ? 'sidebarCollapsedWidth' : 'sidebarWidth'});
-  // Ensure 'open' is false on mobile initially
-  if (window.innerWidth < 1024) {
-    open = false;
-  }
-`.trim().replace(/\n\s*/g, ' '); // Minify for attribute if necessary
+const collapseDesktopEmoji = '⇤';
+const expandDesktopEmoji = '⇥';
+const logoutEmoji = '🚪'; 
 ---
 
 <aside
   id="sidebar"
   class:list={[
     "fixed inset-y-0 left-0 z-30 flex flex-col bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700 transition-all duration-300 ease-in-out",
-    // Dynamic width and translation classes are handled by Alpine
+    "lg:translate-x-0",
   ]}
-  x-data={`(${alpineData})`}
-  x-bind:style="{ width: appliedWidth }"
+  x-data={`{
+    mobileOpen: false,
+    isCollapsed: ${isCollapsedInitial},
+    sidebarWidthValue: typeof window !== 'undefined' ? getComputedStyle(document.documentElement).getPropertyValue('${SIDEBAR_WIDTH_VAR_NAME}').trim() || '16rem' : '16rem',
+    sidebarCollapsedWidthValue: typeof window !== 'undefined' ? getComputedStyle(document.documentElement).getPropertyValue('${SIDEBAR_COLLAPSED_WIDTH_VAR_NAME}').trim() || '5rem' : '5rem',
+
+    init() {
+      if (typeof window !== 'undefined') {
+        this.sidebarWidthValue = getComputedStyle(document.documentElement).getPropertyValue('${SIDEBAR_WIDTH_VAR_NAME}').trim() || '16rem';
+        this.sidebarCollapsedWidthValue = getComputedStyle(document.documentElement).getPropertyValue('${SIDEBAR_COLLAPSED_WIDTH_VAR_NAME}').trim() || '5rem';
+      }
+      this.$watch('isCollapsed', value => {
+        document.documentElement.style.setProperty(
+          '--current-sidebar-width', 
+          value ? this.sidebarCollapsedWidthValue : this.sidebarWidthValue
+        );
+      });
+      document.documentElement.style.setProperty(
+        '--current-sidebar-width', 
+        this.isCollapsed ? this.sidebarCollapsedWidthValue : this.sidebarWidthValue
+      );
+      window.addEventListener('resize', () => {
+        if (window.innerWidth >= 1024) this.mobileOpen = false;
+      });
+      window.addEventListener('toggle-sidebar-mobile', () => {
+        if (window.innerWidth < 1024) this.mobileOpen = !this.mobileOpen;
+      });
+    },
+    toggleCollapse() {
+      this.isCollapsed = !this.isCollapsed;
+    },
+    get currentAppliedWidth() {
+      return this.isCollapsed ? this.sidebarCollapsedWidthValue : this.sidebarWidthValue;
+    }
+  }`}
+  x-bind:style="{ width: currentAppliedWidth }"
   x-bind:class="{
-    'translate-x-0': open || (window.innerWidth >= 1024),
-    '-translate-x-full': !open && (window.innerWidth < 1024)
+    'translate-x-0': mobileOpen || (typeof window !== 'undefined' && window.innerWidth >= 1024),
+    '-translate-x-full': !mobileOpen && (typeof window !== 'undefined' && window.innerWidth < 1024)
   }"
-  x-init={xInitLogic}
+  aria-label="Main navigation"
+  x-cloak
 >
+  {/* Sidebar Header */}
   <div class="flex items-center justify-between h-[var(--header-height)] px-4 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0">
     <a href="/app/dashboard" class="flex items-center space-x-2 overflow-hidden" x-bind:class="{ 'w-full justify-center': isCollapsed }">
-      <div class="h-8 w-8 bg-primary-600 rounded-md flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-        PA
-      </div>
-      <span class="text-lg font-semibold dark:text-white whitespace-nowrap" x-show="!isCollapsed" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">ProperAccount</span>
+      {/* Use emoji instead of PA monogram */}
+      <span class="text-2xl h-8 w-8 flex items-center justify-center flex-shrink-0" aria-hidden="true">{logoEmoji}</span>
+      <span class="text-lg font-semibold dark:text-white whitespace-nowrap transition-opacity" x-show="!isCollapsed" x-transition.opacity.duration.200ms x-cloak>ProperAccount</span>
     </a>
-    {/* Mobile close button */}
     <button
       type="button"
-      class="lg:hidden p-1 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white"
-      @click="open = false"
-      aria-label="Close sidebar"
-      x-show="open"
-      style="display: none;"
-    >
-      <div class="i-carbon-close h-6 w-6"></div>
-    </button>
-    {/* Desktop collapse toggle */}
-    <button
-      type="button"
-      class="hidden lg:block p-1 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white"
+      class="hidden lg:block p-1 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
       @click="toggleCollapse()"
-      aria-label="Toggle sidebar collapse"
+      x-bind:aria-label="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
     >
-      <div class="i-carbon-side-panel-close h-5 w-5" x-show="!isCollapsed" style="display: none;"></div>
-      <div class="i-carbon-side-panel-open h-5 w-5" x-show="isCollapsed" style="display: none;"></div>
+      <span x-show="!isCollapsed" class="text-lg" aria-hidden="true" x-cloak>{collapseDesktopEmoji}</span>
+      <span x-show="isCollapsed" class="text-lg" aria-hidden="true" x-cloak>{expandDesktopEmoji}</span>
     </button>
   </div>
 
-  <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+  {/* Navigation */}
+  <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1" aria-label="Sidebar navigation sections">
     <ul>
       {navigationItems.map(item => (
         <li>
           <a
             href={item.href}
             class:list={[
-              "flex items-center px-3 py-2.5 text-sm font-medium rounded-md group transition-colors duration-150 ease-in-out",
-              isActive(item.href, currentPath)
+              "flex items-center px-3 py-2.5 text-sm font-medium rounded-md group transition-colors duration-150",
+              isActive(item.href)
                 ? 'bg-primary-100 text-primary-700 dark:bg-primary-700/30 dark:text-primary-200'
                 : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-white',
-              { 'justify-center': "isCollapsed" }
             ]}
-            aria-current={isActive(item.href, currentPath) ? 'page' : undefined}
-            x-bind:title="isCollapsed ? item.name : ''"
+            x-bind:class="{ 'justify-center': isCollapsed }"
+            aria-current={isActive(item.href) ? 'page' : undefined}
+            x-bind:title="isCollapsed ? item.name : undefined"
           >
-            <div class={`${item.icon} h-5 w-5 flex-shrink-0`} x-bind:class="{ 'mr-0': isCollapsed, 'mr-3': !isCollapsed }"></div>
-            <span x-show="!isCollapsed" x-transition:opacity class="whitespace-nowrap">{item.name}</span>
+            <span class="text-xl w-5 h-5 flex-shrink-0 flex items-center justify-center transition-all duration-300" x-bind:class="{ 'mr-0': isCollapsed, 'mr-3': !isCollapsed }" aria-hidden="true">{item.emoji}</span>
+            <span class="whitespace-nowrap transition-opacity" x-show="!isCollapsed" x-transition.opacity.duration.200ms x-cloak>{item.name}</span>
           </a>
         </li>
       ))}
@@ -163,29 +141,24 @@ const xInitLogic = `
 
     {adminItems.length > 0 && (
       <div class="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-        <h3
-          class="px-3 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-1"
-          x-show="!isCollapsed" x-transition:opacity
-        >
-          Administration
-        </h3>
+        <h3 class="px-3 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-1 transition-opacity" x-show="!isCollapsed" x-transition.opacity.duration.200ms x-cloak>Administration</h3>
         <ul class="space-y-1">
           {adminItems.map(item => (
             <li>
               <a
                 href={item.href}
                 class:list={[
-                  "flex items-center px-3 py-2.5 text-sm font-medium rounded-md group transition-colors duration-150 ease-in-out",
-                  isActive(item.href, currentPath)
+                  "flex items-center px-3 py-2.5 text-sm font-medium rounded-md group transition-colors duration-150",
+                  isActive(item.href)
                     ? 'bg-primary-100 text-primary-700 dark:bg-primary-700/30 dark:text-primary-200'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-white',
-                  { 'justify-center': "isCollapsed" }
+                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-white'
                 ]}
-                aria-current={isActive(item.href, currentPath) ? 'page' : undefined}
-                x-bind:title="isCollapsed ? item.name : ''"
+                x-bind:class="{ 'justify-center': isCollapsed }"
+                aria-current={isActive(item.href) ? 'page' : undefined}
+                x-bind:title="isCollapsed ? item.name : undefined"
               >
-                <div class={`${item.icon} h-5 w-5 flex-shrink-0`} x-bind:class="{ 'mr-0': isCollapsed, 'mr-3': !isCollapsed }"></div>
-                <span x-show="!isCollapsed" x-transition:opacity class="whitespace-nowrap">{item.name}</span>
+                <span class="text-xl w-5 h-5 flex-shrink-0 flex items-center justify-center transition-all duration-300" x-bind:class="{ 'mr-0': isCollapsed, 'mr-3': !isCollapsed }" aria-hidden="true">{item.emoji}</span>
+                <span class="whitespace-nowrap transition-opacity" x-show="!isCollapsed" x-transition.opacity x-cloak>{item.name}</span>
               </a>
             </li>
           ))}
@@ -200,17 +173,17 @@ const xInitLogic = `
             <a
               href={item.href}
               class:list={[
-                "flex items-center px-3 py-2.5 text-sm font-medium rounded-md group transition-colors duration-150 ease-in-out",
-                isActive(item.href, currentPath)
+                "flex items-center px-3 py-2.5 text-sm font-medium rounded-md group transition-colors duration-150",
+                isActive(item.href)
                   ? 'bg-primary-100 text-primary-700 dark:bg-primary-700/30 dark:text-primary-200'
-                  : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-white',
-                  { 'justify-center': "isCollapsed" }
-                ]}
-              aria-current={isActive(item.href, currentPath) ? 'page' : undefined}
-              x-bind:title="isCollapsed ? item.name : ''"
+                  : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-white'
+              ]}
+              x-bind:class="{ 'justify-center': isCollapsed }"
+              aria-current={isActive(item.href) ? 'page' : undefined}
+              x-bind:title="isCollapsed ? item.name : undefined"
             >
-              <div class={`${item.icon} h-5 w-5 flex-shrink-0`} x-bind:class="{ 'mr-0': isCollapsed, 'mr-3': !isCollapsed }"></div>
-              <span x-show="!isCollapsed" x-transition:opacity class="whitespace-nowrap">{item.name}</span>
+              <span class="text-xl w-5 h-5 flex-shrink-0 flex items-center justify-center transition-all duration-300" x-bind:class="{ 'mr-0': isCollapsed, 'mr-3': !isCollapsed }" aria-hidden="true">{item.emoji}</span>
+              <span class="whitespace-nowrap transition-opacity" x-show="!isCollapsed" x-transition.opacity x-cloak>{item.name}</span>
             </a>
           </li>
         ))}
@@ -218,85 +191,54 @@ const xInitLogic = `
     </div>
   </nav>
 
+  {/* User Profile Section */}
   <div class="border-t border-neutral-200 dark:border-neutral-700 p-3 flex-shrink-0">
     <a
-      href="/app/settings/profile"
+      href={user ? "/app/settings/profile" : "/auth/login"}
       class:list={[
-        "flex items-center group w-full hover:bg-neutral-100 dark:hover:bg-neutral-700/50 rounded-md p-1 transition-colors duration-150 ease-in-out",
-        { 'justify-center': "isCollapsed" }
+        "flex items-center group w-full hover:bg-neutral-100 dark:hover:bg-neutral-700/50 rounded-md p-1.5 transition-colors",
       ]}
-      x-bind:title="isCollapsed ? (user?.name || user?.email || 'User Profile') : ''"
+      x-bind:class="{ 'justify-center': isCollapsed }"
+      x-bind:title="isCollapsed ? (user?.name || user?.email || (user ? 'User Profile' : 'Login')) : undefined"
     >
       <div class="flex-shrink-0">
         {user?.imageUrl ? (
-          <img src={user.imageUrl} alt={user.name || 'User avatar'} class="h-8 w-8 rounded-full"/>
+          <img src={user.imageUrl} alt={user.name || 'User avatar'} class="h-8 w-8 rounded-full object-cover"/>
         ) : (
-          <div class="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-800 flex items-center justify-center">
-            <span class="text-primary-700 dark:text-primary-300 font-medium text-sm">
-              {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
+          <div class="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-800 flex items-center justify-center text-xl">
+            <span class="text-primary-700 dark:text-primary-300 font-medium">
+              {user ? (user.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase() || '👤') : '👤'}
             </span>
           </div>
         )}
       </div>
-      <div class="ml-3 min-w-0 flex-1" x-show="!isCollapsed" x-transition:opacity>
-        <p class="text-sm font-medium text-neutral-700 dark:text-neutral-200 truncate">
-          {user?.name || user?.email || 'Current User'}
-        </p>
-        <p class="text-xs text-neutral-500 dark:text-neutral-400 group-hover:text-primary-600 dark:group-hover:text-primary-400">View profile</p>
+      <div class="ml-3 min-w-0 flex-1 transition-opacity" x-show="!isCollapsed" x-transition.opacity.duration.200ms x-cloak>
+        <p class="text-sm font-medium text-neutral-700 dark:text-neutral-200 truncate">{user?.name || user?.email || 'Guest User'}</p>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 group-hover:text-primary-600 dark:group-hover:text-primary-400">{user ? 'View profile' : 'Sign In'}</p>
       </div>
-       <form method="POST" action="/auth/logout" class="ml-auto" x-show="!isCollapsed" x-transition:opacity>
-         <button type="submit" class="p-1 text-neutral-400 hover:text-red-500 dark:hover:text-red-400" aria-label="Sign out" title="Sign out">
-            <div class="i-carbon-logout h-5 w-5"></div>
+      {user && (
+        <form method="POST" action="/auth/signout" class="ml-auto transition-opacity" x-show="!isCollapsed" x-transition.opacity.duration.200ms x-cloak>
+          <button type="submit" class="p-1 text-neutral-500 hover:text-danger dark:hover:text-danger-light rounded-md" aria-label="Sign out" title="Sign out">
+            <span class="text-lg" aria-hidden="true">{logoutEmoji}</span>
           </button>
-       </form>
+        </form>
+      )}
     </a>
   </div>
 </aside>
 
-<div class="fixed top-3 left-3 z-40 lg:hidden">
-  <button
-    type="button"
-    class="p-2 text-neutral-600 bg-white dark:bg-neutral-800 rounded-md shadow-md hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
-    @click="$data(document.getElementById('sidebar')).open = true"
-    aria-label="Open sidebar"
-    x-ref="mobileMenuButton"
-  >
-    <div class="i-carbon-menu h-6 w-6"></div>
-  </button>
-</div>
-
+{/* Mobile menu overlay */}
 <div
   class="fixed inset-0 z-20 bg-neutral-900/30 dark:bg-black/50 lg:hidden transition-opacity"
   x-data="{}"
-  x-show="$data(document.getElementById('sidebar')).open && window.innerWidth < 1024"
+  x-show="$data(document.getElementById('sidebar')).mobileOpen && (typeof window !== 'undefined' && window.innerWidth < 1024)"
   x-transition:enter="ease-out duration-300"
   x-transition:enter-start="opacity-0"
   x-transition:enter-end="opacity-100"
   x-transition:leave="ease-in duration-200"
   x-transition:leave-start="opacity-100"
   x-transition:leave-end="opacity-0"
-  @click="$data(document.getElementById('sidebar')).open = false"
-  style="display: none;"
+  @click="$data(document.getElementById('sidebar')).mobileOpen = false"
+  x-cloak
   aria-hidden="true"
 ></div>
-
-<script is:inline>
-  // Alpine.js logic is now primarily handled by directives (x-data, x-init, @click etc.)
-  // The x-init on the sidebar handles initial state and resize listeners.
-  // This script block can be removed if all logic is within Alpine directives.
-  // Ensuring CSS variables are set for sidebar width (global.css or here in <style> tag)
-  // :root {
-  //   --sidebar-width: 16rem; /* 256px */
-  //   --sidebar-collapsed-width: 5rem; /* 80px */
-  //   --current-sidebar-width: var(--sidebar-width); /* Default, Alpine will update */
-  // }
-  // #main-content-area {
-  //   transition: padding-left 0.3s ease-in-out;
-  //   padding-left: var(--current-sidebar-width);
-  // }
-  // @media (max-width: 1023px) { /* Below lg */
-  //   #main-content-area {
-  //     padding-left: 0 !important;
-  //   }
-  // }
-</script>

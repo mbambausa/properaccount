@@ -1,0 +1,31 @@
+{
+  "title": "Residential Real Estate Chart of Accounts",
+  "description": "Standard chart of accounts for residential rental properties",
+  "accounts": [
+    { "code": "1000", "name": "Cash - Operating", "type": "asset", "subtype": "current" },
+    { "code": "1100", "name": "Accounts Receivable", "type": "asset", "subtype": "current" },
+    { "code": "1200", "name": "Security Deposits Held", "type": "asset", "subtype": "current" },
+    { "code": "1500", "name": "Land", "type": "asset", "subtype": "fixed" },
+    { "code": "1600", "name": "Buildings", "type": "asset", "subtype": "fixed" },
+    { "code": "1610", "name": "Accumulated Depreciation - Buildings", "type": "asset", "subtype": "contra" },
+    
+    { "code": "2000", "name": "Accounts Payable", "type": "liability", "subtype": "current" },
+    { "code": "2100", "name": "Security Deposits Payable", "type": "liability", "subtype": "current" },
+    { "code": "2500", "name": "Mortgage Payable", "type": "liability", "subtype": "long-term" },
+    
+    { "code": "3000", "name": "Owner's Equity", "type": "equity", "subtype": "capital" },
+    { "code": "3100", "name": "Retained Earnings", "type": "equity", "subtype": "retained" },
+    
+    { "code": "4000", "name": "Rental Income", "type": "income", "subtype": "operating" },
+    { "code": "4100", "name": "Late Fees", "type": "income", "subtype": "other" },
+    { "code": "4200", "name": "Application Fees", "type": "income", "subtype": "other" },
+    
+    { "code": "5000", "name": "Property Management", "type": "expense", "subtype": "operating" },
+    { "code": "5100", "name": "Repairs & Maintenance", "type": "expense", "subtype": "operating" },
+    { "code": "5200", "name": "Property Tax", "type": "expense", "subtype": "operating" },
+    { "code": "5300", "name": "Insurance", "type": "expense", "subtype": "operating" },
+    { "code": "5400", "name": "Utilities", "type": "expense", "subtype": "operating" },
+    { "code": "5500", "name": "Depreciation Expense", "type": "expense", "subtype": "non-cash" },
+    { "code": "5600", "name": "Interest Expense", "type": "expense", "subtype": "financing" }
+  ]
+}

@@ -1,117 +1,156 @@
 # .gitignore
-
 # =========================================
-# General
+# Environment & Secrets - CRITICAL
 # =========================================
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-*.log
-
-# Environment variables - CRITICAL to ignore
 .env
 .env.*
-!.env.example # Keep example env files version controlled
+!.env.example
 .dev.vars
+*.pem
+*.key
+*.cert
+secrets/
 
-# OS-specific files
+# =========================================
+# Dependencies & Package Managers
+# =========================================
+node_modules/
+.pnpm-store/
+.yarn/
+
+# =========================================
+# Build Outputs & Caches
+# =========================================
+dist/
+.astro/
+.output/
+*.wasm
+*.wasm.map
+.parcel-cache/
+
+# =========================================
+# Cloudflare & Wrangler
+# =========================================
+.wrangler/
+.mf/
+.dev.vars
+.cloudflare/
+
+# =========================================
+# Database & Storage
+# =========================================
+# Local D1 databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Drizzle migrations metadata
+cloudflare/d1/migrations/meta/_journal.json
+drizzle/meta/
+
+# Local backups
+backups/
+*.backup
+*.sql
+
+# =========================================
+# Testing
+# =========================================
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+playwright/.auth/
+coverage/
+.nyc_output/
+
+# Vitest
+.vitest-cache/
+
+# =========================================
+# Development Tools
+# =========================================
+# OS Files
 .DS_Store
 Thumbs.db
 desktop.ini
+._*
 
-# Editor-specific files
+# Editors
 .idea/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
-!.vscode/tasks.json
 !.vscode/launch.json
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Dependency directories
-node_modules/
-
-# Temporary files
-.tmp/
-tmp/
+*.swp
+*.swo
+*~
+.sublime-*
 
 # =========================================
-# Build output & Caches
+# Logs & Debug
 # =========================================
-dist/
-.astro/ # Astro's build cache and intermediate files
-.output/ # Common output directory for some tools
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
 
 # =========================================
-# Cloudflare Wrangler & Miniflare
+# Mojo/WASM Build Artifacts
 # =========================================
-.mf/ # Miniflare local state
-.wrangler/ # Wrangler config, cache, and local dev state
-
-# Local D1 development databases (Wrangler creates these in .wrangler/state/d1)
-# .d1/ # This might be redundant if .wrangler/ covers it, but explicit can be good.
-
-# =========================================
-# Testing - Playwright
-# =========================================
-test-results/
-playwright-report/
-playwright/.cache/
-playwright/.auth/ # Stores authentication state for tests
-
-# =========================================
-# Drizzle ORM
-# =========================================
-# drizzle.config.ts.snap # Snapshot for Drizzle config (if used)
-# If Drizzle Kit generates other local files/folders outside of .wrangler, add them here.
-# For example, if you have a local SQLite file for Drizzle development not managed by Wrangler:
-# *.db
-# *.sqlite
-# *.sqlite3
-# properaccount-dev.db # Or specific local DB names if not covered by .d1/ or .wrangler/
-
-# =========================================
-# Mojo Language Specifics
-# =========================================
-# Python cache files (if Python is used in the Mojo toolchain/workflow)
-**/__pycache__/
+*.mojo.lock
+__pycache__/
 *.pyc
 *.pyo
-*.pyd
-.ipynb_checkpoints
-
-# Mojo build artifacts (if any, that are NOT part of the committed .wasm files in src/)
-# Example: if `mojo build` creates specific output files/folders locally
-# that aren't in `dist/` or `.astro/` and aren't meant to be committed.
-# *.mojopkg
-# .mojo_build_cache/
-
-# IMPORTANT: *.mojo and *.🔥 are typically Mojo SOURCE files.
-# If your Mojo source files are in `src/mojo/`, they should be version controlled.
-# DO NOT ignore them if they are source code.
-# Ensure the following lines are commented out or removed if .mojo/.🔥 are your sources.
-# *.mojo
-# *.🔥
-
-# If you compile Mojo to WASM and commit the .wasm files (e.g., in src/mojo/wasm/),
-# ensure that directory is NOT ignored.
+.ipynb_checkpoints/
+.python-version
 
 # =========================================
-# Other Frameworks/Tools (if used)
+# Temporary Files
 # =========================================
-.vercel # Vercel output (if ever used)
-.turbo # Turborepo cache (if ever used)
+.tmp/
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
 
 # =========================================
-# Generic Database files (if not covered by .d1/ or specific names)
+# ProperAccount Specific
 # =========================================
-# *.db
-# *.sqlite
-# *.sqlite3
-# properaccount-dev.db # Example if you have a specific local dev db file
+# User uploaded documents (local dev)
+uploads/
+documents/
+public/uploads/
+
+# Report cache (local dev)
+.report-cache/
+
+# Session storage (local dev)
+.sessions/
+
+# Generated types
+src/types/generated/
+
+# =========================================
+# Security & Compliance
+# =========================================
+# Audit logs
+audit-logs/
+*.audit
+
+# =========================================
+# Bundle Analysis
+# =========================================
+stats.html
+bundle-stats.json
+.size-limit.json

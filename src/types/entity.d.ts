@@ -1,146 +1,270 @@
 // src/types/entity.d.ts
+// EntityType provides broad classification of an entity.
+export type EntityType = 
+  | 'individual' 
+  | 'company' 
+  | 'trust' 
+  | 'partnership'
+  | 'property'        // Physical property
+  | 'tenant'          // Tenant entity
+  | 'vendor';         // Service provider
 
 /**
- * Standard entity types, aligning with Zod schema in Technical Reference Guide.
+ * Real estate specific entity subtypes
  */
-export type EntityType = 'individual' | 'company' | 'trust' | 'partnership';
+export type RealEstateEntityType = 
+  | 'rental_property'
+  | 'commercial_property'
+  | 'residential_property'
+  | 'mixed_use_property'
+  | 'vacant_land'
+  | 'property_unit'    // Individual units within a property
+  | 'property_group';  // Portfolio or group of properties
 
 /**
- * More detailed business structure types, can be used in a separate classification field if needed.
+ * DetailedBusinessType supports more granular business structure distinction.
  */
 export type DetailedBusinessType =
   | 'sole_proprietorship'
-  | 'partnership' // Also in EntityType
+  | 'partnership'
   | 'llc_single_member'
   | 'llc_multi_member'
   | 's_corporation'
   | 'c_corporation'
   | 'non_profit'
-  | 'trust' // Also in EntityType
+  | 'trust'
   | 'estate'
+  | 'reit'                      // Real Estate Investment Trust
+  | 'property_management'       // Property management company
+  | 'real_estate_syndicate'     // Syndicated real estate investment
+  | 'real_estate_partnership'   // Specific RE partnership
   | 'other';
 
 /**
- * Represents a property or business entity.
- * This should align closely with the 'entities' D1 table and Zod schema.
+ * Property details for real estate entities
  */
-export interface Entity {
-  /** Unique identifier (UUID) for this entity */
-  readonly id: string;
-
-  /** Display name of the entity (required, max 100 chars) */
-  name: string;
-
-  /**
-   * Primary classification of the entity.
-   * Aligns with `type` in D1 schema and Zod schema (Tech Ref, p. 39).
-   */
-  type: EntityType;
-
-  /** Optional detailed description of the entity or its purpose. */
-  description?: string | null;
-
-  /**
-   * Tax Identification Number (e.g., EIN for companies, SSN for individuals if applicable and handled securely).
-   * Aligns with `taxId` in Zod schema (Tech Ref, p. 39).
-   */
-  tax_id?: string | null;
-
-  /** Legal/formal name as registered with authorities (if different from display name) */
-  legal_name?: string | null;
-
-  /** Primary business address */
-  address?: string | null; // Consider a structured address type later
-
-  /** Registered agent information, if applicable */
-  registered_agent?: {
-    name: string;
-    address: string;
-  } | null;
-
-  /** Date of incorporation or formation (ISO Date string) */
-  formation_date?: string | null;
-
-  /** Jurisdiction of formation (e.g., "Delaware", "California") */
-  jurisdiction?: string | null;
-
-  /**
-   * ID of parent entity (for hierarchical structures like subsidiaries).
-   * Aligns with `parentId` in D1 schema and Zod schema (Tech Ref, p. 8, 39).
-   */
-  parent_id?: string | null;
-
-  /** Whether this entity is currently active and operational */
-  is_active: boolean; // Default true
-
-  /**
-   * User ID of the person who initially created this entity record in the system.
-   * For auditing purposes. Access control is managed via EntityAccess.
-   */
-  readonly created_by_user_id: string;
-
-  /** Timestamp (Unix ms or s) when this entity was created in the system */
-  readonly created_at: number | Date;
-
-  /** Timestamp (Unix ms or s) when this entity was last updated */
-  updated_at: number | Date;
-
-  /** Optional path string for hierarchical navigation (e.g., "parent/child"), could be derived. */
-  readonly path?: string | null;
-
-  /** Custom fields for additional entity-specific information */
-  custom_fields?: Record<string, any> | null;
-
-  // Removed `allows_sub_entities` as this can often be inferred or managed by system logic/permissions
-  // Removed `user_id` (direct owner) to align with D1 schema focusing on `entity_access` for user linkage.
+export interface PropertyDetails {
+  propertyType?: RealEstateEntityType;
+  propertyAddress?: string;
+  parcelNumber?: string;
+  yearBuilt?: number;
+  squareFootage?: number;
+  unitCount?: number;
+  lotSize?: number;
+  zoning?: string;
+  taxId?: string;
+  purchaseDate?: string;
+  purchasePrice?: number;
+  currentValue?: number;
+  propertyManagerId?: string;
 }
 
 /**
- * Payload for creating or updating an Entity.
- * Excludes read-only fields (`id`, `created_by_user_id`, `created_at`, `path`).
- * `updated_at` is typically set by the server.
+ * Enhanced vendor information
+ */
+export interface VendorInfo {
+  category: 'maintenance' | 'landscaping' | 'cleaning' | 'professional' | 'utility' | 'other';
+  serviceTypes?: string[];
+  taxIdType?: 'EIN' | 'SSN' | 'Other';
+  taxId?: string;
+  w9OnFile?: boolean;
+  insuranceExpiry?: string;
+  licenseNumber?: string;
+  licenseExpiry?: string;
+  rating?: number;
+  preferredPaymentMethod?: 'check' | 'ach' | 'wire' | 'cash';
+  paymentTerms?: 'net30' | 'net60' | 'due_on_receipt' | 'custom';
+  hourlyRate?: number;
+  isInsured?: boolean;
+  insuranceAmount?: number;
+  certifications?: string[];
+}
+
+/**
+ * Updated Entity interface with real estate fields
+ */
+export interface Entity {
+  /** Unique identifier (UUID) for this entity */
+  id: string;
+
+  /** User who owns or created this entity */
+  userId: string;
+
+  /** Entity display name */
+  name: string;
+
+  /** Legal/formal name as registered (if different from display name) */
+  legalName?: string | null;
+
+  /** Employer Identification Number / Tax ID */
+  ein?: string | null;
+
+  /** Mailing/business address */
+  address?: string | null;
+
+  /** Legal address (if different from business address) */
+  legalAddress?: string | null;
+
+  /** Business type classification */
+  businessType?: DetailedBusinessType | null;
+
+  /** Primary classification of the entity */
+  type?: EntityType; // Optional if you support legacy records
+
+  /** For real estate entities: property-specific details */
+  propertyDetails?: PropertyDetails | null;
+
+  /** For tenant entities: lease details */
+  tenantInfo?: {
+    leaseStartDate?: string;
+    leaseEndDate?: string;
+    monthlyRent?: number;
+    securityDeposit?: number;
+    propertyId?: string; // Link to property entity
+  } | null;
+
+  /** For vendor entities: enhanced service info */
+  vendorInfo?: VendorInfo | null;
+
+  /** Hierarchical parent entity */
+  parentId?: string | null;
+
+  /** Is entity active? */
+  isActive: boolean;
+
+  /** Allows sub-entities? */
+  allowsSubEntities: boolean;
+
+  /** Creation timestamp (Unix seconds) */
+  createdAt: number;
+
+  /** Last updated timestamp (Unix seconds) */
+  updatedAt: number;
+
+  /** Optional description of entity */
+  description?: string | null;
+
+  /** Registered agent information, if applicable */
+  registeredAgent?: { name: string; address: string } | null;
+
+  /** Date of formation (ISO string) */
+  formationDate?: string | null;
+
+  /** Jurisdiction of formation */
+  jurisdiction?: string | null;
+
+  /** Custom user-defined fields */
+  customFields?: Record<string, any> | null;
+
+  /** Hierarchical path string, e.g., "parent/child" */
+  path?: string | null;
+}
+
+/**
+ * Entity input payload for create/update (excluding read-only fields).
  */
 export interface EntityInput {
   name: string;
   type: EntityType;
   description?: string | null;
-  tax_id?: string | null;
-  legal_name?: string | null;
+  ein?: string | null;
+  legalName?: string | null;
   address?: string | null;
-  registered_agent?: { name: string; address: string; } | null;
-  formation_date?: string | null;
+  legalAddress?: string | null;
+  businessType?: DetailedBusinessType | null;
+  propertyDetails?: PropertyDetails | null;
+  tenantInfo?: {
+    leaseStartDate?: string;
+    leaseEndDate?: string;
+    monthlyRent?: number;
+    securityDeposit?: number;
+    propertyId?: string;
+  } | null;
+  vendorInfo?: VendorInfo | null;
+  registeredAgent?: { name: string; address: string } | null;
+  formationDate?: string | null;
   jurisdiction?: string | null;
-  parent_id?: string | null;
-  is_active?: boolean; // Server should default to true if not provided on create
-  custom_fields?: Record<string, any> | null;
+  parentId?: string | null;
+  isActive?: boolean;
+  allowsSubEntities?: boolean;
+  customFields?: Record<string, any> | null;
 }
 
 /**
- * Query parameters for filtering and retrieving entities.
+ * Entity relationship types for real estate and business logic
+ */
+export interface EntityRelationship {
+  id: string;
+  fromEntityId: string;
+  toEntityId: string;
+  relationshipType: 
+    | 'owns'              // Owner owns property
+    | 'manages'           // Manager manages property
+    | 'leases_from'       // Tenant leases from property
+    | 'provides_service'  // Vendor provides service to entity
+    | 'subsidiary_of'     // Corporate structure
+    | 'partner_in';       // Partnership relationship
+  startDate?: string;
+  endDate?: string;
+  details?: Record<string, any>;
+}
+
+/**
+ * Filters for querying entities, now including real estate–specific filters.
  */
 export interface EntityQueryFilters {
-  /** Filter by entity type */
   type?: EntityType;
-  /** Only return active entities when true */
-  is_active?: boolean;
-  /** Only return entities that are children of the specified parent ID */
-  parent_id?: string | null; // `null` could mean top-level entities
-  /** Search term to filter entities by name, legal_name, or description */
-  search_term?: string;
-  /** Filter by entities created by a specific user */
-  created_by_user_id?: string;
-  /** Sorting options */
-  // sort_by?: keyof Entity; // Be cautious with direct keyof for sensitive fields
-  // sort_direction?: 'asc' | 'desc';
-  /** Pagination options from api.d.ts could be used here */
-  // pagination?: PaginationQuery;
+  isActive?: boolean;
+  parentId?: string | null;
+  searchTerm?: string;
+  userId?: string;
+  businessType?: DetailedBusinessType;
+  propertyType?: RealEstateEntityType;
+  hasVacancy?: boolean;
+  managedBy?: string;
+  location?: {
+    city?: string;
+    state?: string;
+    zipCode?: string;
+  };
 }
 
 /**
- * Hierarchical representation of an entity with its direct children.
- * Useful for displaying entity trees.
+ * Entity with possible child entities for hierarchical display.
  */
 export interface EntityWithChildren extends Entity {
-  children?: Entity[]; // Simpler, direct children only. Deep nesting handled by recursive calls.
-  // Removed depth, can be calculated during tree traversal if needed.
+  children?: Entity[];
+}
+
+/**
+ * Entity summary with key metrics
+ */
+export interface EntitySummary extends Entity {
+  accountCount?: number;
+  totalBalance?: number;
+  occupancyRate?: number;
+  monthlyIncome?: number;
+  activeLeases?: number;
+  childEntityCount?: number;
+}
+
+/**
+ * Type guards for entities
+ */
+export function isPropertyEntity(entity: Entity): entity is Entity & { propertyDetails: PropertyDetails } {
+  return entity.type === 'property' && entity.propertyDetails != null;
+}
+
+export function isTenantEntity(entity: Entity): boolean {
+  return entity.type === 'tenant' && entity.tenantInfo != null;
+}
+
+export function isVendorEntity(entity: Entity): entity is Entity & { vendorInfo: VendorInfo } {
+  return entity.type === 'vendor' && entity.vendorInfo != null;
+}
+
+export function hasActiveLeases(entity: Entity): boolean {
+  if (entity.type !== 'tenant' || !entity.tenantInfo) return false;
+  const now = new Date().toISOString();
+  return entity.tenantInfo.leaseEndDate ? entity.tenantInfo.leaseEndDate > now : false;
 }

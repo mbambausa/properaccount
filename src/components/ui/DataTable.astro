@@ -1,0 +1,101 @@
+---
+// src/components/ui/DataTable.astro
+export interface Header {
+  key: string;
+  label: string;
+  class?: string;
+  cellClass?: string;
+  isNumeric?: boolean;
+}
+
+export interface Row {
+  [key: string]: any;
+  rowClass?: string;
+}
+
+export interface Props {
+  headers: Header[];
+  rows: Row[];
+  caption?: string;
+  striped?: boolean;
+  hoverable?: boolean;
+  bordered?: boolean;
+  class?: string;
+  tableClass?: string;
+  'data-testid'?: string;
+}
+
+const {
+  headers = [],
+  rows = [],
+  caption,
+  striped = false,
+  hoverable = false,
+  bordered = false,
+  class: userClassName,
+  tableClass = 'table-financial',
+  'data-testid': dataTestId,
+} = Astro.props;
+
+const getCellContent = (row: Row, header: Header) => {
+  return header.key.split('.').reduce((obj, part) => obj && obj[part], row);
+};
+---
+
+<div class:list={["overflow-x-auto shadow-sm rounded-lg", userClassName]} data-testid={dataTestId}>
+  <table class:list={[tableClass, "min-w-full text-sm"]}>
+    {caption && <caption class="p-2 text-sm font-semibold text-left text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800">{caption}</caption>}
+    <thead class="bg-neutral-50 dark:bg-neutral-800/50">
+      <tr>
+        {headers.map(header => (
+          <th 
+            scope="col" 
+            class:list={[
+              "th-financial",
+              header.isNumeric ? "text-right" : "text-left",
+              bordered ? "border border-neutral-300 dark:border-neutral-600" : "",
+              header.class
+            ]}
+          >
+            {header.label}
+          </th>
+        ))}
+      </tr>
+    </thead>
+    <tbody class="bg-white dark:bg-neutral-900 divide-y divide-neutral-200 dark:divide-neutral-700">
+      {rows.map((row, rowIndex) => (
+        <tr 
+          class:list={[
+            row.rowClass,
+            striped && rowIndex % 2 !== 0 ? "bg-neutral-50 dark:bg-neutral-800/30" : "",
+            hoverable ? "hover:bg-neutral-100 dark:hover:bg-neutral-800" : ""
+          ]}
+        >
+          {headers.map(header => (
+            <td 
+              class:list={[
+                header.isNumeric ? "td-number" : "td-financial",
+                bordered ? "border border-neutral-300 dark:border-neutral-600" : "",
+                header.cellClass,
+                header.isNumeric ? "tabular-nums" : ""
+              ]}
+            >
+              {/* Removed row={row} and header={header} from <slot /> */}
+              <slot name={`cell-${header.key}`}>
+                {/* Default content if no slot is provided */}
+                {getCellContent(row, header)}
+              </slot>
+            </td>
+          ))}
+        </tr>
+      ))}
+      {rows.length === 0 && (
+        <tr>
+          <td colspan={headers.length} class="p-4 text-center text-neutral-500 dark:text-neutral-400">
+            No data available.
+          </td>
+        </tr>
+      )}
+    </tbody>
+  </table>
+</div>

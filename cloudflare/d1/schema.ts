@@ -1,161 +1,248 @@
 // cloudflare/d1/schema.ts
+import { sqliteTable, text, integer, primaryKey, unique, index } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { relations } from 'drizzle-orm';
 
-/**
- * TypeScript interfaces mirroring the D1 database schema.
- * These should EXACTLY match the column names and basic data types from your SQL migrations.
- * - Timestamps are stored as Unix epoch seconds (number).
- * - Booleans are stored as INTEGER (0 for false, 1 for true), reflected as `number` here.
- * - Monetary amounts (e.g., transaction line amounts) are stored as INTEGER in cents.
- * - Percentages (e.g., recovery_percentage) are stored as INTEGER in basis points (e.g., 100.00% = 10000).
- */
+// ============================================
+// AUTHENTICATION & USER TABLES
+// ============================================
 
-export interface DbUser { // Corresponds to 'users' table
-  id: string;
-  email: string;
-  name?: string | null;
-  password_hash?: string | null; // SQL 'password_hash TEXT' is nullable
-  role: string; // SQL 'role TEXT NOT NULL DEFAULT 'user''
-  created_at: number;
-  updated_at: number;
-  verified_at?: number | null; // SQL 'verified_at INTEGER' is nullable
-  image_url?: string | null; // SQL 'image_url TEXT' is nullable
-}
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').unique().notNull(),
+  name: text('name'),
+  passwordHash: text('password_hash'),
+  role: text('role').notNull().default('user'),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').notNull().default(sql`(unixepoch())`),
+  verifiedAt: integer('verified_at'),
+  imageUrl: text('image_url'),
+}, (table) => ({
+  emailIdx: index('idx_users_email').on(table.email),
+}));
 
-export interface DbAuthAccount { // Corresponds to `auth_accounts` table
-  provider_id: string;
-  provider_user_id: string;
-  user_id: string;
-  created_at: number;
-  updated_at: number;
-}
+export const sessions = sqliteTable('sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  expiresAt: integer('expires_at').notNull(),
+  data: text('data'),
+});
 
-export interface DbSession { // Corresponds to `sessions` table
-  id: string;
-  user_id: string;
-  created_at: number;
-  expires_at: number;
-  data?: string | null;
-}
+export const authAccounts = sqliteTable('auth_accounts', {
+  providerId: text('provider_id').notNull(),
+  providerUserId: text('provider_user_id').notNull(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.providerId, table.providerUserId] }),
+}));
 
-export interface DbVerificationToken { // Corresponds to `verification_tokens` table
-  identifier: string;
-  token: string;
-  expires_at: number;
-  created_at: number;
-  type: string; // Added to match SQL migration
-}
+export const verificationTokens = sqliteTable('verification_tokens', {
+  identifier: text('identifier').notNull(),
+  token: text('token').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  type: text('type', { enum: ['EMAIL_VERIFICATION', 'PASSWORD_RESET'] }).notNull().default('EMAIL_VERIFICATION'),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.identifier, table.token] }),
+}));
 
-export interface DbActivityLog { // Corresponds to `activity_logs` table
-  id: number; // SQL `id INTEGER PRIMARY KEY AUTOINCREMENT`
-  user_id?: string | null;
-  action: string;
-  ip_address?: string | null;
-  user_agent?: string | null;
-  metadata?: string | null; // JSON string
-  created_at: number;
-}
+export const activityLogs = sqliteTable('activity_logs', {
+  id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  metadata: text('metadata'), // JSON string
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  userActionIdx: index('idx_activity_logs_user_action').on(table.userId, table.action),
+}));
 
-// Placeholder for a table that would store password reset tokens if distinct from verification_tokens
-// Your current auth.ts uses verification_tokens with a 'type' field for this.
-/*
-export interface DbPasswordResetToken {
-  id: string;
-  user_id: string;
-  token_hash: string;
-  expires_at: number;
-  created_at: number;
-  is_used: number; // 0 or 1
-}
-*/
+// ============================================
+// ENTITY MANAGEMENT TABLES
+// ============================================
 
-// Application-specific Db interfaces (assuming these match their respective migrations)
-export interface DbEntity {
-  id: string;
-  user_id: string; // This is likely the 'creator_user_id' or similar contextually.
-  name: string;
-  legal_name?: string | null;
-  ein?: string | null; // Or tax_id depending on final DB column name
-  address?: string | null;
-  legal_address?: string | null;
-  business_type?: string | null;
-  parent_id?: string | null;
-  is_active: number; // 0 or 1
-  allows_sub_entities: number; // 0 or 1
-  created_at: number;
-  updated_at: number;
-}
+export const entities = sqliteTable('entities', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  legalName: text('legal_name'),
+  ein: text('ein'),
+  address: text('address'),
+  legalAddress: text('legal_address'),
+  businessType: text('business_type'),
+  parentId: text('parent_id').references((): any => entities.id, { onDelete: 'set null' }),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  allowsSubEntities: integer('allows_sub_entities', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  userIdx: index('idx_entities_user_id').on(table.userId),
+  einIdx: index('idx_entities_ein').on(table.ein),
+}));
 
-export type AccountSystemTypeDb = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
+// ====== NEW ENTITY ACCESS TABLE ======
+export const entityAccess = sqliteTable("entity_access", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  entityId: text("entity_id").notNull().references(() => entities.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  permissions: text("permissions").notNull(), // JSON array of permissions
+  grantedAt: integer("granted_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  grantedByUserId: text("granted_by_user_id").notNull().references(() => users.id),
+}, (table) => {
+  return {
+    entityUserIdx: index("entity_access_entity_user_idx").on(table.entityId, table.userId),
+    userIdx: index("entity_access_user_idx").on(table.userId),
+  };
+});
 
-export interface DbChartOfAccount {
-  id: string;
-  user_id: string; // User who owns this CoA template/definition
-  code: string;
-  name: string;
-  type: AccountSystemTypeDb;
-  subtype?: string | null;
-  description?: string | null;
-  is_recoverable: number; // 0 or 1
-  recovery_percentage?: number | null; // Basis points
-  is_active: number; // 0 or 1
-  tax_category?: string | null;
-  parent_id?: string | null;
-  created_at: number;
-  updated_at: number;
-}
+// ============================================
+// ACCOUNTING TABLES
+// ============================================
 
-export interface DbEntityAccount {
-  id: string;
-  user_id: string; // User context, likely owner of the entity
-  entity_id: string;
-  account_id: string;
-  custom_name?: string | null;
-  is_active: number; // 0 or 1
-  recovery_type?: string | null;
-  recovery_percentage?: number | null; // Basis points
-  created_at: number;
-  updated_at: number;
-}
+export const chartOfAccounts = sqliteTable('chart_of_accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  type: text('type', { enum: ['asset', 'liability', 'equity', 'income', 'expense'] }).notNull(),
+  subtype: text('subtype'),
+  description: text('description'),
+  isRecoverable: integer('is_recoverable', { mode: 'boolean' }).notNull().default(false),
+  recoveryPercentage: integer('recovery_percentage'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  taxCategory: text('tax_category'),
+  parentId: text('parent_id').references((): any => chartOfAccounts.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  userCodeUnique: unique('idx_coa_user_code').on(table.userId, table.code),
+}));
 
-export interface DbJournal {
-  id: string;
-  user_id: string;
-  entity_id: string;
-  name: string;
-  description?: string | null;
-  created_at: number;
-  updated_at: number;
-}
+export const entityAccounts = sqliteTable('entity_accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  entityId: text('entity_id').notNull().references(() => entities.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').notNull().references(() => chartOfAccounts.id, { onDelete: 'restrict' }),
+  customName: text('custom_name'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  recoveryType: text('recovery_type'),
+  recoveryPercentage: integer('recovery_percentage'),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  entityAccountUnique: unique('idx_entity_accounts_entity_account').on(table.entityId, table.accountId),
+}));
 
-export type TransactionStatusTypeDb = 'pending' | 'posted' | 'voided';
+export const journals = sqliteTable('journals', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  entityId: text('entity_id').notNull().references(() => entities.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').notNull().default(sql`(unixepoch())`),
+});
 
-export interface DbTransaction {
-  id: string;
-  user_id: string;
-  entity_id: string;
-  journal_id?: string | null;
-  date: number;
-  description: string;
-  reference?: string | null;
-  status: TransactionStatusTypeDb;
-  is_reconciled: number; // 0 or 1
-  document_url?: string | null;
-  // New fields if added based on src/types/transaction.d.ts
-  // transaction_type?: string;
-  // related_entity_id?: string | null;
-  created_at: number;
-  updated_at: number;
-}
+export const transactions = sqliteTable('transactions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  entityId: text('entity_id').notNull().references(() => entities.id, { onDelete: 'cascade' }),
+  journalId: text('journal_id').references(() => journals.id, { onDelete: 'set null' }),
+  date: integer('date').notNull(),
+  description: text('description').notNull(),
+  reference: text('reference'),
+  status: text('status', { enum: ['pending', 'posted', 'voided'] }).notNull().default('pending'),
+  isReconciled: integer('is_reconciled', { mode: 'boolean' }).notNull().default(false),
+  documentUrl: text('document_url'),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  entityDateIdx: index('idx_transactions_entity_id_date').on(table.entityId, table.date),
+}));
 
-export interface DbTransactionLine {
-  id: string;
-  transaction_id: string;
-  entity_account_id: string;
-  amount: number; // Cents
-  is_debit: number; // 0 or 1
-  memo?: string | null;
-  created_at: number;
-  // New fields if added based on src/types/transaction.d.ts
-  // tax_code?: string | null;
-  // metadata?: string | null; // JSON string
-}
+export const transactionLines = sqliteTable('transaction_lines', {
+  id: text('id').primaryKey(),
+  transactionId: text('transaction_id').notNull().references(() => transactions.id, { onDelete: 'cascade' }),
+  entityAccountId: text('entity_account_id').notNull().references(() => entityAccounts.id, { onDelete: 'restrict' }),
+  amount: integer('amount').notNull(), // Amount in cents
+  isDebit: integer('is_debit', { mode: 'boolean' }).notNull(),
+  memo: text('memo'),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  transactionIdx: index('idx_transaction_lines_transaction_id').on(table.transactionId),
+}));
+
+// ============================================
+// RELATIONS
+// ============================================
+
+export const usersRelations = relations(users, ({ many }) => ({
+  sessions: many(sessions),
+  authAccounts: many(authAccounts),
+  activityLogs: many(activityLogs),
+  entities: many(entities),
+  chartOfAccounts: many(chartOfAccounts),
+  journals: many(journals),
+  transactions: many(transactions),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, { fields: [sessions.userId], references: [users.id] }),
+}));
+
+export const authAccountsRelations = relations(authAccounts, ({ one }) => ({
+  user: one(users, { fields: [authAccounts.userId], references: [users.id] }),
+}));
+
+export const entitiesRelations = relations(entities, ({ one, many }) => ({
+  user: one(users, { fields: [entities.userId], references: [users.id] }),
+  parent: one(entities, { fields: [entities.parentId], references: [entities.id], relationName: 'parent_child' }),
+  children: many(entities, { relationName: 'parent_child' }),
+  entityAccounts: many(entityAccounts),
+  journals: many(journals),
+  transactions: many(transactions),
+  entityAccess: many(entityAccess),
+}));
+
+export const entityAccessRelations = relations(entityAccess, ({ one }) => ({
+  entity: one(entities, { fields: [entityAccess.entityId], references: [entities.id] }),
+  user: one(users, { fields: [entityAccess.userId], references: [users.id] }),
+  grantedBy: one(users, { fields: [entityAccess.grantedByUserId], references: [users.id] }),
+}));
+
+export const chartOfAccountsRelations = relations(chartOfAccounts, ({ one, many }) => ({
+  user: one(users, { fields: [chartOfAccounts.userId], references: [users.id] }),
+  parent: one(chartOfAccounts, { fields: [chartOfAccounts.parentId], references: [chartOfAccounts.id], relationName: 'parent_child_coa' }),
+  children: many(chartOfAccounts, { relationName: 'parent_child_coa' }),
+  entityInstances: many(entityAccounts),
+}));
+
+export const entityAccountsRelations = relations(entityAccounts, ({ one, many }) => ({
+  entity: one(entities, { fields: [entityAccounts.entityId], references: [entities.id] }),
+  account: one(chartOfAccounts, { fields: [entityAccounts.accountId], references: [chartOfAccounts.id] }),
+  transactionLines: many(transactionLines),
+}));
+
+export const journalsRelations = relations(journals, ({ one, many }) => ({
+  user: one(users, { fields: [journals.userId], references: [users.id] }),
+  entity: one(entities, { fields: [journals.entityId], references: [entities.id] }),
+  transactions: many(transactions),
+}));
+
+export const transactionsRelations = relations(transactions, ({ one, many }) => ({
+  user: one(users, { fields: [transactions.userId], references: [users.id] }),
+  entity: one(entities, { fields: [transactions.entityId], references: [entities.id] }),
+  journal: one(journals, { fields: [transactions.journalId], references: [journals.id] }),
+  lines: many(transactionLines),
+}));
+
+export const transactionLinesRelations = relations(transactionLines, ({ one }) => ({
+  transaction: one(transactions, { fields: [transactionLines.transactionId], references: [transactions.id] }),
+  entityAccount: one(entityAccounts, { fields: [transactionLines.entityAccountId], references: [entityAccounts.id] }),
+}));
